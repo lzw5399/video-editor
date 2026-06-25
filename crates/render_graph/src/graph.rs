@@ -3,14 +3,15 @@ use std::error::Error;
 use std::fmt;
 
 use draft_model::{
-    AudioEffectSlotKind, CanvasBackground, DraftId, Filter, FilterKind, Keyframe, KeyframeProperty,
-    KeyframeValue, MaterialId, MaterialKind, Microseconds, RationalFrameRate,
-    SegmentBackgroundFilling, SegmentId, SegmentRetiming, SegmentVisual, SourceTimerange,
-    TargetTimerange, TrackId, TrackKind, Transition,
+    AudioEffectSlotKind, AudioRetimePolicy, CanvasBackground, DraftId, Filter, FilterKind,
+    Keyframe, KeyframeProperty, KeyframeValue, MaterialId, MaterialKind, Microseconds,
+    RationalFrameRate, SegmentBackgroundFilling, SegmentId, SegmentRetiming, SegmentVisual,
+    SourceTimerange, TargetTimerange, TrackId, TrackKind, Transition,
 };
 use engine_core::{
     FrameTextOverlay, MaterialRenderableState, NormalizedDraft, NormalizedMaterialRef,
-    NormalizedSegment, NormalizedTrack, RenderRangeState,
+    NormalizedSegment, NormalizedTrack, RenderRangeState, audio_retime_diagnostic,
+    retimed_source_range,
 };
 use serde::{Deserialize, Serialize};
 
@@ -312,7 +313,26 @@ pub struct RenderTransitionWindow {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct RenderRetimeIntent {
     pub retiming: SegmentRetiming,
+    pub source_mapping: RenderRetimeSourceMapping,
+    pub audio: RenderRetimeAudioIntent,
     pub capability: RenderEffectCapability,
+    pub support: RenderIntentSupport,
+    pub reason: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RenderRetimeSourceMapping {
+    pub source_timerange: SourceTimerange,
+    pub retimed_source_timerange: SourceTimerange,
+    pub target_timerange: TargetTimerange,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RenderRetimeAudioIntent {
+    pub policy: AudioRetimePolicy,
+    pub follow_speed: bool,
     pub support: RenderIntentSupport,
     pub reason: String,
 }
@@ -424,6 +444,7 @@ pub enum RenderGraphErrorKind {
     EmptyRenderRange,
     UnknownSegmentInRangeState,
     UnknownMaterialInRangeState,
+    RetimeSourceMappingFailed,
     UnsupportedProfileSetting,
 }
 
@@ -466,7 +487,7 @@ pub fn build_render_graph(
             unknown_segment_error(&segment_key.0, &segment_key.1, "audio range state")
         })?;
         material_ids.insert(segment.material.material_id.clone());
-        audio_mixes.push(render_audio_mix(&normalized.draft_id, track, segment));
+        audio_mixes.push(render_audio_mix(&normalized.draft_id, track, segment)?);
     }
 
     let mut text_overlays = Vec::new();
@@ -482,7 +503,7 @@ pub fn build_render_graph(
             track,
             segment,
             overlay,
-        ));
+        )?);
     }
 
     let materials = render_materials(normalized, &material_ids)?;
@@ -719,7 +740,7 @@ fn render_video_layer(
         stack_index,
         source_timerange: segment.source_timerange.clone(),
         target_timerange: segment.target_timerange.clone(),
-        retime: render_retime_intent(&segment.retiming),
+        retime: render_retime_intent(segment)?,
         keyframes: segment.keyframes.clone(),
         filters: render_filter_intents(draft_id, track, segment, &segment.filters),
         transition: segment
@@ -734,8 +755,8 @@ fn render_audio_mix(
     draft_id: &DraftId,
     track: &NormalizedTrack,
     segment: &NormalizedSegment,
-) -> RenderAudioMix {
-    RenderAudioMix {
+) -> Result<RenderAudioMix, RenderGraphError> {
+    Ok(RenderAudioMix {
         node_id: RenderGraphNodeId::audio_segment(
             draft_id,
             &track.track_id,
@@ -747,7 +768,7 @@ fn render_audio_mix(
         material_id: segment.material.material_id.clone(),
         source_timerange: segment.source_timerange.clone(),
         target_timerange: segment.target_timerange.clone(),
-        retime: render_retime_intent(&segment.retiming),
+        retime: render_retime_intent(segment)?,
         keyframes: segment.keyframes.clone(),
         volume_level_millis: segment.volume_level_millis,
         gain_millis: segment.audio.gain_millis,
@@ -758,7 +779,7 @@ fn render_audio_mix(
         effect_slots: render_audio_effect_slots(segment),
         classification: RenderAudioMixClassification::Audible,
         filters: render_filter_intents(draft_id, track, segment, &segment.filters),
-    }
+    })
 }
 
 fn render_text_overlay(
@@ -766,8 +787,8 @@ fn render_text_overlay(
     track: &NormalizedTrack,
     segment: &NormalizedSegment,
     overlay: FrameTextOverlay,
-) -> RenderTextOverlay {
-    RenderTextOverlay {
+) -> Result<RenderTextOverlay, RenderGraphError> {
+    Ok(RenderTextOverlay {
         node_id: RenderGraphNodeId::text_overlay(
             draft_id,
             &track.track_id,
@@ -776,7 +797,7 @@ fn render_text_overlay(
         ),
         overlay,
         material_id: segment.material.material_id.clone(),
-        retime: render_retime_intent(&segment.retiming),
+        retime: render_retime_intent(segment)?,
         keyframes: segment.keyframes.clone(),
         filters: render_filter_intents(draft_id, track, segment, &segment.filters),
         transition: segment
@@ -784,7 +805,7 @@ fn render_text_overlay(
             .as_ref()
             .map(|transition| render_transition_intent(draft_id, track, segment, transition)),
         visual: segment.visual.clone(),
-    }
+    })
 }
 
 fn render_visual_diagnostics(
@@ -1029,13 +1050,73 @@ fn render_filter_intents(
         .collect()
 }
 
-fn render_retime_intent(retiming: &SegmentRetiming) -> RenderRetimeIntent {
-    let capability = render_retime_capability(retiming);
-    RenderRetimeIntent {
-        retiming: retiming.clone(),
+fn render_retime_intent(
+    segment: &NormalizedSegment,
+) -> Result<RenderRetimeIntent, RenderGraphError> {
+    let capability = render_retime_capability(&segment.retiming);
+    let retimed_source_timerange = retimed_source_range(
+        &segment.source_timerange,
+        segment.target_timerange.duration,
+        &segment.retiming,
+    )
+    .map_err(|error| {
+        RenderGraphError::new(
+            RenderGraphErrorKind::RetimeSourceMappingFailed,
+            format!(
+                "segment {} retime source mapping failed: {}",
+                segment.segment_id.as_str(),
+                error
+            ),
+        )
+        .with_segment_id(segment.segment_id.clone())
+        .with_material_id(segment.material.material_id.clone())
+    })?;
+    Ok(RenderRetimeIntent {
+        retiming: segment.retiming.clone(),
+        source_mapping: RenderRetimeSourceMapping {
+            source_timerange: segment.source_timerange.clone(),
+            retimed_source_timerange,
+            target_timerange: segment.target_timerange.clone(),
+        },
+        audio: render_retime_audio_intent(&segment.retiming, &capability),
         support: capability.export,
         reason: capability.export_reason.clone(),
         capability,
+    })
+}
+
+fn render_retime_audio_intent(
+    retiming: &SegmentRetiming,
+    capability: &RenderEffectCapability,
+) -> RenderRetimeAudioIntent {
+    if let Some(diagnostic) = audio_retime_diagnostic(retiming) {
+        return RenderRetimeAudioIntent {
+            policy: retiming.audio_policy,
+            follow_speed: false,
+            support: RenderIntentSupport::Unsupported,
+            reason: diagnostic.message,
+        };
+    }
+
+    match retiming.audio_policy {
+        AudioRetimePolicy::FollowVideoSpeed => RenderRetimeAudioIntent {
+            policy: retiming.audio_policy,
+            follow_speed: true,
+            support: capability.export,
+            reason: capability.export_reason.clone(),
+        },
+        AudioRetimePolicy::PreservePitch => RenderRetimeAudioIntent {
+            policy: retiming.audio_policy,
+            follow_speed: false,
+            support: RenderIntentSupport::Supported,
+            reason: "preserve-pitch audio retime is a no-op at 1x speed".to_owned(),
+        },
+        AudioRetimePolicy::MuteUnsupported => RenderRetimeAudioIntent {
+            policy: retiming.audio_policy,
+            follow_speed: false,
+            support: RenderIntentSupport::Degraded,
+            reason: "audio will mute when retime follow-speed support is unavailable".to_owned(),
+        },
     }
 }
 

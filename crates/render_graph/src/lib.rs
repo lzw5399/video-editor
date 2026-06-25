@@ -24,9 +24,9 @@ pub use graph::{
     RenderAudioMixClassification, RenderAudioMixDiagnostic, RenderAudioVolumeKeyframe,
     RenderCanvas, RenderCanvasBackground, RenderCanvasBackgroundMode, RenderCanvasDiagnostic,
     RenderFilterIntent, RenderGraph, RenderGraphError, RenderGraphErrorKind, RenderIntentSupport,
-    RenderMaterial, RenderRetimeIntent, RenderSampledFrame, RenderTextOverlay,
-    RenderTransitionIntent, RenderTransitionWindow, RenderVideoLayer, RenderVisualDiagnostic,
-    build_render_graph,
+    RenderMaterial, RenderRetimeAudioIntent, RenderRetimeIntent, RenderRetimeSourceMapping,
+    RenderSampledFrame, RenderTextOverlay, RenderTransitionIntent, RenderTransitionWindow,
+    RenderVideoLayer, RenderVisualDiagnostic, build_render_graph,
 };
 pub use incremental::{
     RenderGraphDiff, RenderGraphNodeChange, RenderGraphNodeId, RenderGraphNodeRole,

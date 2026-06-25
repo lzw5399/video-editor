@@ -5,8 +5,7 @@ use draft_model::{
 };
 use engine_core::{EngineProfile, normalize_draft, resolve_render_range};
 use render_graph::{
-    OutputDimensions, RenderGraphDiff, RenderGraphSnapshot, RenderOutputProfile,
-    build_render_graph,
+    OutputDimensions, RenderGraphDiff, RenderGraphSnapshot, RenderOutputProfile, build_render_graph,
 };
 
 const GRAPH_RS: &str = include_str!("../src/graph.rs");
@@ -201,7 +200,10 @@ fn snapshot_for(draft: &Draft) -> RenderGraphSnapshot {
 }
 
 fn retimed_graph_draft(retiming: SegmentRetiming) -> Draft {
-    let mut draft = Draft::new("phase19-retime-render-graph", "Phase 19 Retime Render Graph");
+    let mut draft = Draft::new(
+        "phase19-retime-render-graph",
+        "Phase 19 Retime Render Graph",
+    );
     draft.materials.push(video_material());
     let mut video_track = Track::new("video-track", TrackKind::Video, "视频");
     let mut segment = Segment::new(
