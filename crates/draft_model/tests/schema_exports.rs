@@ -12,23 +12,25 @@ use draft_model::{
     AudioEffectSlot, AudioEffectSlotKind, AudioFade, AudioOutputDeviceStatus,
     AudioOutputDeviceSummary, AudioPanBalance, AudioPreviewCommandPayload,
     AudioPreviewCommandResponse, AudioPreviewPlaybackStatus, AudioPreviewStatusResponse,
-    CancelExportCommandPayload, CanvasAdaptationPolicy, CanvasAspectRatio, CanvasAspectRatioPreset,
-    CanvasBackground, CanvasBackgroundCapability, ChangedEntity, CommandDelta, CommandDeltaName,
-    CommandEnvelope, CommandError, CommandErrorKind, CommandEvent, CommandHistorySnapshot,
-    CommandName, CommandPayload, CommandResultEnvelope, CommandState, DirtyDomain, DirtyRange,
-    DirtyRangeSource, DisplayableArtifactRef, Draft, DraftCanvasConfig, DraftId, DraftMetadata,
-    DraftSchemaVersion, ExportDiagnostic, ExportDiagnosticKind, ExportJobPhase,
-    ExportJobStatusResponse, ExportPrepDirtyFacts, ExportPreset, ExportValidationReport, Filter,
-    GetArtifactQuotaStatusCommandPayload, GetArtifactStatusCommandPayload,
+    AudioRetimePolicy, BlendModeKind, CancelExportCommandPayload, CanvasAdaptationPolicy,
+    CanvasAspectRatio, CanvasAspectRatioPreset, CanvasBackground, CanvasBackgroundCapability,
+    CapabilityCategory, CapabilityReportItem, CapabilitySupport, CapabilitySurface, ChangedEntity,
+    CommandDelta, CommandDeltaName, CommandEnvelope, CommandError, CommandErrorKind, CommandEvent,
+    CommandHistorySnapshot, CommandName, CommandPayload, CommandResultEnvelope, CommandState,
+    DirtyDomain, DirtyRange, DirtyRangeSource, DisplayableArtifactRef, Draft, DraftCanvasConfig,
+    DraftId, DraftMetadata, DraftSchemaVersion, EffectCapabilityRegistry, EffectKind,
+    ExportDiagnostic, ExportDiagnosticKind, ExportJobPhase, ExportJobStatusResponse,
+    ExportPrepDirtyFacts, ExportPreset, ExportValidationReport, ExternalEffectReference, Filter,
+    FilterKind, GetArtifactQuotaStatusCommandPayload, GetArtifactStatusCommandPayload,
     GetExportJobStatusCommandPayload, InvalidationScope, Keyframe, KeyframeEasing,
     KeyframeInterpolation, KeyframeProperty, KeyframeValue, MAX_TEXT_LAYOUT_MILLIS,
     MAX_TEXT_LETTER_SPACING_MILLIS, MAX_TEXT_LINE_HEIGHT_MILLIS, MIN_TEXT_LINE_HEIGHT_MILLIS,
-    MainTrackMagnet, Material, MaterialArtifactStatus, MaterialId, MaterialKind, MaterialMetadata,
-    MaterialStatus, Microseconds, MissingMaterialCommandDiagnostic,
+    MainTrackMagnet, MaskKind, Material, MaterialArtifactStatus, MaterialId, MaterialKind,
+    MaterialMetadata, MaterialStatus, Microseconds, MissingMaterialCommandDiagnostic,
     MissingMaterialCommandDiagnosticKind, PingCommandPayload, PreviewArtifactResponse,
     PreviewDiagnostic, PreviewDiagnosticKind, PreviewOutputProfile, PreviewStatus,
     ProbeMediaRuntimeCommandPayload, ProbeRuntimeCapabilitiesCommandPayload, RationalFrameRate,
-    RefreshArtifactStatusCommandPayload, RunArtifactGarbageCollectionCommandPayload,
+    RefreshArtifactStatusCommandPayload, RetimeMode, RunArtifactGarbageCollectionCommandPayload,
     RuntimeBinaryCapability, RuntimeBinaryKind, RuntimeCapabilityReport, RuntimeCapabilityStatus,
     RuntimeCodecCapability, RuntimeColorDiagnostic, RuntimeColorMatrix, RuntimeColorPrimaries,
     RuntimeColorRange, RuntimeColorTransfer, RuntimeDeviceId, RuntimeFallbackDecodePathCapability,
@@ -38,12 +40,13 @@ use draft_model::{
     RuntimeTextureBackend, RuntimeTextureInteropCapability, RuntimeVideoColorMetadata,
     RuntimeVideoPixelFormat, RuntimeWindowsMediaIoCapabilities, Segment, SegmentAnchor,
     SegmentAudio, SegmentBackgroundFilling, SegmentBlendMode, SegmentCrop, SegmentFitMode,
-    SegmentId, SegmentMask, SegmentOpacity, SegmentPosition, SegmentRotation, SegmentScale,
-    SegmentTransform, SegmentVisual, SegmentVolume, SnappingSettings, SourceTimerange,
-    StartExportCommandPayload, TargetTimerange, TextAlignment, TextBackground, TextBox,
-    TextBubbleRef, TextEffectRef, TextFont, TextLayoutRegion, TextSegment, TextSegmentSource,
-    TextShadow, TextStroke, TextStyle, TextWrapping, TimelineCommandResponse, TimelineSelection,
-    Track, TrackId, TrackKind, Transition, VersionCommandPayload, WaveformDisplayPeak,
+    SegmentId, SegmentMask, SegmentOpacity, SegmentPosition, SegmentRetiming, SegmentRotation,
+    SegmentScale, SegmentTransform, SegmentVisual, SegmentVolume, SnappingSettings,
+    SourceTimerange, SpeedCurvePoint, SpeedRatio, StartExportCommandPayload, TargetTimerange,
+    TextAlignment, TextBackground, TextBox, TextBubbleRef, TextEffectRef, TextFont,
+    TextLayoutRegion, TextSegment, TextSegmentSource, TextShadow, TextStroke, TextStyle,
+    TextWrapping, TimelineCommandResponse, TimelineSelection, Track, TrackId, TrackKind,
+    Transition, TransitionKind, TransitionReference, VersionCommandPayload, WaveformDisplayPeak,
     WaveformDisplayPeaksResponse, WaveformDisplayStatus,
 };
 use schemars::{Schema, schema_for};
@@ -145,6 +148,7 @@ fn schema_exports_generated_contract_artifacts_from_rust() {
     assert_draft_schema_rejects_invalid_canvas_config(&draft_schema_json);
     assert_draft_schema_rejects_invalid_text_contracts(&draft_schema_json);
     assert_draft_schema_rejects_invalid_keyframe_contracts(&draft_schema_json);
+    assert_draft_schema_includes_phase19_effect_contracts(&draft_schema_json);
     assert_or_update_contract_file(&draft_schema_path, &format!("{draft_schema_json}\n"));
 
     let command_envelope_ts = ts_contract_with_prelude(
@@ -286,8 +290,25 @@ fn schema_exports_generated_contract_artifacts_from_rust() {
         export_decl::<KeyframeInterpolation>(),
         export_decl::<KeyframeEasing>(),
         export_decl::<Keyframe>(),
+        export_decl::<CapabilitySurface>(),
+        export_decl::<ExternalEffectReference>(),
+        export_decl::<CapabilitySupport>(),
+        export_decl::<CapabilityCategory>(),
+        export_decl::<CapabilityReportItem>(),
+        export_decl::<EffectCapabilityRegistry>(),
+        export_decl::<EffectKind>(),
+        export_decl::<FilterKind>(),
         export_decl::<Filter>(),
+        export_decl::<TransitionKind>(),
+        export_decl::<TransitionReference>(),
         export_decl::<Transition>(),
+        export_decl::<SpeedRatio>(),
+        export_decl::<SpeedCurvePoint>(),
+        export_decl::<RetimeMode>(),
+        export_decl::<AudioRetimePolicy>(),
+        export_decl::<SegmentRetiming>(),
+        export_decl::<MaskKind>(),
+        export_decl::<BlendModeKind>(),
         export_decl::<TextAlignment>(),
         export_decl::<TextSegmentSource>(),
         export_decl::<TextFont>(),
@@ -331,6 +352,38 @@ fn schema_exports_generated_contract_artifacts_from_rust() {
         !draft_ts.contains("export type Microseconds = bigint;"),
         "Microseconds must not advertise bigint over the JSON IPC boundary"
     );
+    for expected_contract in [
+        "CapabilitySurface",
+        "CapabilitySupport",
+        "CapabilityReportItem",
+        "EffectCapabilityRegistry",
+        "ExternalEffectReference",
+        "FilterKind",
+        "TransitionReference",
+        "SpeedRatio",
+        "SpeedCurvePoint",
+        "RetimeMode",
+        "SegmentRetiming",
+        "MaskKind",
+        "BlendModeKind",
+    ] {
+        assert!(
+            draft_ts.contains(&format!("export type {expected_contract}")),
+            "Draft.ts should export Phase 19 contract {expected_contract}"
+        );
+    }
+    for forbidden in [
+        "speedSeconds",
+        "durationSeconds",
+        "targetTimeSeconds",
+        "radius: number",
+        "opacity: number",
+    ] {
+        assert!(
+            !draft_ts.contains(forbidden),
+            "Phase 19 generated TS must not expose naked float-style field {forbidden}"
+        );
+    }
     assert_or_update_contract_file(generated_dir.join("Draft.ts"), &draft_ts);
 }
 
@@ -1870,6 +1923,7 @@ fn draft_schema_json() -> String {
     constrain_canvas_config_schema(&mut schema);
     constrain_text_contracts_schema(&mut schema);
     constrain_keyframe_contracts_schema(&mut schema);
+    include_phase19_effect_contract_schemas(&mut schema);
     serde_json::to_string_pretty(&schema).expect("draft schema should serialize")
 }
 
@@ -1922,6 +1976,72 @@ where
         .insert(name.to_owned(), contract_value);
 }
 
+fn include_phase19_effect_contract_schemas(schema: &mut Schema) {
+    let mut schema_value = schema.as_value().clone();
+    for (name, include) in [
+        (
+            "CapabilitySurface",
+            include_contract_schema::<CapabilitySurface> as fn(&mut serde_json::Value, &str),
+        ),
+        (
+            "CapabilitySupport",
+            include_contract_schema::<CapabilitySupport>,
+        ),
+        (
+            "CapabilityCategory",
+            include_contract_schema::<CapabilityCategory>,
+        ),
+        (
+            "CapabilityReportItem",
+            include_contract_schema::<CapabilityReportItem>,
+        ),
+        (
+            "EffectCapabilityRegistry",
+            include_contract_schema::<EffectCapabilityRegistry>,
+        ),
+        ("EffectKind", include_contract_schema::<EffectKind>),
+        (
+            "ExternalEffectReference",
+            include_contract_schema::<ExternalEffectReference>,
+        ),
+        ("FilterKind", include_contract_schema::<FilterKind>),
+        ("Filter", include_contract_schema::<Filter>),
+        ("TransitionKind", include_contract_schema::<TransitionKind>),
+        (
+            "TransitionReference",
+            include_contract_schema::<TransitionReference>,
+        ),
+        ("Transition", include_contract_schema::<Transition>),
+        ("SpeedRatio", include_contract_schema::<SpeedRatio>),
+        (
+            "SpeedCurvePoint",
+            include_contract_schema::<SpeedCurvePoint>,
+        ),
+        ("RetimeMode", include_contract_schema::<RetimeMode>),
+        (
+            "AudioRetimePolicy",
+            include_contract_schema::<AudioRetimePolicy>,
+        ),
+        (
+            "SegmentRetiming",
+            include_contract_schema::<SegmentRetiming>,
+        ),
+        ("MaskKind", include_contract_schema::<MaskKind>),
+        ("BlendModeKind", include_contract_schema::<BlendModeKind>),
+    ] {
+        include(&mut schema_value, name);
+    }
+    constrain_speed_ratio_contract(&mut schema_value);
+    *schema = Schema::try_from(schema_value).expect("patched draft schema should remain valid");
+}
+
+fn include_contract_schema<T>(schema_value: &mut serde_json::Value, name: &str)
+where
+    T: schemars::JsonSchema,
+{
+    include_command_contract_schema::<T>(schema_value, name);
+}
+
 fn current_draft_schema_version_schema() -> serde_json::Value {
     json!({
         "type": "integer",
@@ -1941,6 +2061,23 @@ fn constrain_rational_frame_rate_schema(schema: &mut Schema) {
     let mut schema_value = schema.as_value().clone();
     constrain_rational_frame_rate(&mut schema_value);
     *schema = Schema::try_from(schema_value).expect("patched draft schema should remain valid");
+}
+
+fn constrain_speed_ratio_contract(schema_value: &mut serde_json::Value) {
+    let defs = schema_value
+        .get_mut("$defs")
+        .and_then(serde_json::Value::as_object_mut)
+        .expect("generated schema should contain $defs");
+    let speed_ratio = defs
+        .get_mut("SpeedRatio")
+        .expect("generated schema should contain SpeedRatio");
+    speed_ratio["properties"]["numerator"]["minimum"] = json!(1);
+    speed_ratio["properties"]["denominator"]["minimum"] = json!(1);
+    assert_eq!(speed_ratio["properties"]["numerator"]["minimum"], json!(1));
+    assert_eq!(
+        speed_ratio["properties"]["denominator"]["minimum"],
+        json!(1)
+    );
 }
 
 fn constrain_canvas_config(schema_value: &mut serde_json::Value) {
@@ -2230,6 +2367,73 @@ fn assert_draft_schema_rejects_invalid_keyframe_contracts(schema_json: &str) {
         assert!(
             schema.validate(&value).is_err(),
             "draft schema should reject invalid keyframe contract: {case}"
+        );
+    }
+}
+
+fn assert_draft_schema_includes_phase19_effect_contracts(schema_json: &str) {
+    let schema_value: serde_json::Value =
+        serde_json::from_str(schema_json).expect("draft schema should parse");
+    let defs = schema_value
+        .get("$defs")
+        .and_then(serde_json::Value::as_object)
+        .expect("draft schema should expose definitions");
+
+    for expected_contract in [
+        "CapabilitySurface",
+        "CapabilitySupport",
+        "CapabilityReportItem",
+        "EffectCapabilityRegistry",
+        "ExternalEffectReference",
+        "FilterKind",
+        "Filter",
+        "TransitionReference",
+        "Transition",
+        "SpeedRatio",
+        "SpeedCurvePoint",
+        "RetimeMode",
+        "SegmentRetiming",
+        "MaskKind",
+        "BlendModeKind",
+    ] {
+        assert!(
+            defs.contains_key(expected_contract),
+            "draft schema should include Phase 19 definition {expected_contract}"
+        );
+    }
+
+    let segment = defs
+        .get("Segment")
+        .expect("Segment definition should exist");
+    assert!(
+        property_references_def(segment, "retiming", "#/$defs/SegmentRetiming"),
+        "Segment.retiming should reference typed SegmentRetiming"
+    );
+    let speed_ratio = defs
+        .get("SpeedRatio")
+        .expect("SpeedRatio definition should exist");
+    assert_eq!(
+        speed_ratio.pointer("/properties/numerator/type"),
+        Some(&json!("integer")),
+        "speed ratio numerator must be an integer field"
+    );
+    assert_eq!(
+        speed_ratio.pointer("/properties/denominator/type"),
+        Some(&json!("integer")),
+        "speed ratio denominator must be an integer field"
+    );
+
+    let forbidden_schema_text = schema_json;
+    for forbidden in [
+        "speedSeconds",
+        "durationSeconds",
+        "targetTimeSeconds",
+        "radiusSeconds",
+        "opacitySeconds",
+    ] {
+        assert!(
+            !forbidden_schema_text.contains(forbidden),
+            "draft schema must not persist naked floating-time/effect field {forbidden}"
         );
     }
 }

@@ -102,6 +102,23 @@
       "maximum": 1000,
       "minimum": -1000
     },
+    "AudioRetimePolicy": {
+      "type": "string",
+      "enum": [
+        "followVideoSpeed",
+        "preservePitch",
+        "muteUnsupported"
+      ]
+    },
+    "BlendModeKind": {
+      "title": "BlendModeKind",
+      "type": "string",
+      "enum": [
+        "normal",
+        "multiply",
+        "screen"
+      ]
+    },
     "CanvasAdaptationPolicy": {
       "type": "string",
       "enum": [
@@ -229,6 +246,126 @@
         }
       ]
     },
+    "CapabilityCategory": {
+      "type": "string",
+      "enum": [
+        "effect",
+        "filter",
+        "transition",
+        "retime",
+        "mask",
+        "blend",
+        "externalReference"
+      ]
+    },
+    "CapabilityReportItem": {
+      "type": "object",
+      "properties": {
+        "capabilityId": {
+          "type": "string"
+        },
+        "category": {
+          "$ref": "#/$defs/CapabilityCategory"
+        },
+        "displayName": {
+          "type": "string"
+        },
+        "export": {
+          "$ref": "#/$defs/CapabilitySupport"
+        },
+        "preview": {
+          "$ref": "#/$defs/CapabilitySupport"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "capabilityId",
+        "displayName",
+        "category",
+        "preview",
+        "export"
+      ]
+    },
+    "CapabilitySupport": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "reason": {
+              "type": "string"
+            },
+            "state": {
+              "type": "string",
+              "const": "supported"
+            }
+          },
+          "required": [
+            "state",
+            "reason"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "reason": {
+              "type": "string"
+            },
+            "state": {
+              "type": "string",
+              "const": "degraded"
+            }
+          },
+          "required": [
+            "state",
+            "reason"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "reason": {
+              "type": "string"
+            },
+            "state": {
+              "type": "string",
+              "const": "unsupported"
+            }
+          },
+          "required": [
+            "state",
+            "reason"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "reason": {
+              "type": "string"
+            },
+            "reference": {
+              "$ref": "#/$defs/ExternalEffectReference"
+            },
+            "state": {
+              "type": "string",
+              "const": "externalReference"
+            }
+          },
+          "required": [
+            "state",
+            "reference",
+            "reason"
+          ]
+        }
+      ]
+    },
+    "CapabilitySurface": {
+      "title": "CapabilitySurface",
+      "type": "string",
+      "enum": [
+        "preview",
+        "export"
+      ]
+    },
     "DraftCanvasConfig": {
       "type": "object",
       "properties": {
@@ -290,23 +427,153 @@
       "type": "integer",
       "const": 1
     },
-    "Filter": {
+    "EffectCapabilityRegistry": {
+      "title": "EffectCapabilityRegistry",
       "type": "object",
       "properties": {
-        "name": {
-          "type": "string"
-        },
-        "parameters": {
-          "type": "object",
-          "additionalProperties": {
-            "type": "string"
+        "entries": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CapabilityReportItem"
           }
         }
       },
       "additionalProperties": false,
       "required": [
-        "name",
-        "parameters"
+        "entries"
+      ]
+    },
+    "EffectKind": {
+      "title": "EffectKind",
+      "type": "string",
+      "enum": [
+        "gaussianBlur",
+        "basicColorAdjustment",
+        "opacityAdjustment"
+      ]
+    },
+    "ExternalEffectReference": {
+      "type": "object",
+      "properties": {
+        "displayName": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "effectId": {
+          "type": "string"
+        },
+        "provider": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "provider",
+        "effectId"
+      ]
+    },
+    "Filter": {
+      "title": "Filter",
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": true
+        },
+        "kind": {
+          "$ref": "#/$defs/FilterKind"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "kind"
+      ]
+    },
+    "FilterKind": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "gaussianBlur"
+            },
+            "radiusMillis": {
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "kind",
+            "radiusMillis"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "brightnessMillis": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "contrastMillis": {
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0
+            },
+            "kind": {
+              "type": "string",
+              "const": "basicColorAdjustment"
+            },
+            "saturationMillis": {
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "kind",
+            "brightnessMillis",
+            "contrastMillis",
+            "saturationMillis"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "opacityAdjustment"
+            },
+            "opacityMillis": {
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "kind",
+            "opacityMillis"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "externalReference"
+            },
+            "reference": {
+              "$ref": "#/$defs/ExternalEffectReference"
+            }
+          },
+          "required": [
+            "kind",
+            "reference"
+          ]
+        }
       ]
     },
     "Keyframe": {
@@ -444,6 +711,14 @@
       "additionalProperties": false,
       "required": [
         "enabled"
+      ]
+    },
+    "MaskKind": {
+      "title": "MaskKind",
+      "type": "string",
+      "enum": [
+        "rectangle",
+        "ellipse"
       ]
     },
     "Material": {
@@ -599,6 +874,45 @@
         "denominator"
       ]
     },
+    "RetimeMode": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "constant"
+            },
+            "speed": {
+              "$ref": "#/$defs/SpeedRatio"
+            }
+          },
+          "required": [
+            "kind",
+            "speed"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "speedCurve"
+            },
+            "points": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/SpeedCurvePoint"
+              }
+            }
+          },
+          "required": [
+            "kind",
+            "points"
+          ]
+        }
+      ]
+    },
     "Segment": {
       "type": "object",
       "properties": {
@@ -633,6 +947,19 @@
         },
         "materialId": {
           "$ref": "#/$defs/MaterialId"
+        },
+        "retiming": {
+          "$ref": "#/$defs/SegmentRetiming",
+          "default": {
+            "audioPolicy": "followVideoSpeed",
+            "mode": {
+              "kind": "constant",
+              "speed": {
+                "denominator": 1,
+                "numerator": 1
+              }
+            }
+          }
         },
         "segmentId": {
           "$ref": "#/$defs/SegmentId"
@@ -873,15 +1200,39 @@
           "properties": {
             "kind": {
               "type": "string",
-              "const": "unsupported"
+              "const": "multiply"
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "screen"
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "externalReference"
             },
-            "name": {
-              "type": "string"
+            "reference": {
+              "$ref": "#/$defs/ExternalEffectReference"
             }
           },
           "required": [
             "kind",
-            "name"
+            "reference"
           ]
         }
       ]
@@ -946,17 +1297,101 @@
         {
           "type": "object",
           "properties": {
+            "featherMillis": {
+              "type": "integer",
+              "format": "uint32",
+              "default": 0,
+              "minimum": 0
+            },
+            "heightMillis": {
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0
+            },
             "kind": {
               "type": "string",
-              "const": "unsupported"
+              "const": "rectangle"
             },
-            "name": {
-              "type": "string"
+            "widthMillis": {
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0
+            },
+            "xMillis": {
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0
+            },
+            "yMillis": {
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0
             }
           },
           "required": [
             "kind",
-            "name"
+            "xMillis",
+            "yMillis",
+            "widthMillis",
+            "heightMillis"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "featherMillis": {
+              "type": "integer",
+              "format": "uint32",
+              "default": 0,
+              "minimum": 0
+            },
+            "heightMillis": {
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0
+            },
+            "kind": {
+              "type": "string",
+              "const": "ellipse"
+            },
+            "widthMillis": {
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0
+            },
+            "xMillis": {
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0
+            },
+            "yMillis": {
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "kind",
+            "xMillis",
+            "yMillis",
+            "widthMillis",
+            "heightMillis"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "externalReference"
+            },
+            "reference": {
+              "$ref": "#/$defs/ExternalEffectReference"
+            }
+          },
+          "required": [
+            "kind",
+            "reference"
           ]
         }
       ]
@@ -991,6 +1426,23 @@
       "required": [
         "x",
         "y"
+      ]
+    },
+    "SegmentRetiming": {
+      "title": "SegmentRetiming",
+      "type": "object",
+      "properties": {
+        "audioPolicy": {
+          "$ref": "#/$defs/AudioRetimePolicy",
+          "default": "followVideoSpeed"
+        },
+        "mode": {
+          "$ref": "#/$defs/RetimeMode"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "mode"
       ]
     },
     "SegmentRotation": {
@@ -1118,6 +1570,42 @@
       "required": [
         "start",
         "duration"
+      ]
+    },
+    "SpeedCurvePoint": {
+      "type": "object",
+      "properties": {
+        "speed": {
+          "$ref": "#/$defs/SpeedRatio"
+        },
+        "targetTime": {
+          "$ref": "#/$defs/Microseconds"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "targetTime",
+        "speed"
+      ]
+    },
+    "SpeedRatio": {
+      "type": "object",
+      "properties": {
+        "denominator": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 1
+        },
+        "numerator": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 1
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "numerator",
+        "denominator"
       ]
     },
     "TargetTimerange": {
@@ -21548,19 +22036,62 @@
       ]
     },
     "Transition": {
+      "title": "Transition",
       "type": "object",
       "properties": {
         "duration": {
           "$ref": "#/$defs/Microseconds"
         },
-        "name": {
-          "type": "string"
+        "reference": {
+          "$ref": "#/$defs/TransitionReference"
         }
       },
       "additionalProperties": false,
       "required": [
-        "name",
+        "reference",
         "duration"
+      ]
+    },
+    "TransitionKind": {
+      "type": "string",
+      "enum": [
+        "dissolve"
+      ]
+    },
+    "TransitionReference": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "firstParty"
+            },
+            "transition": {
+              "$ref": "#/$defs/TransitionKind"
+            }
+          },
+          "required": [
+            "kind",
+            "transition"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "externalReference"
+            },
+            "reference": {
+              "$ref": "#/$defs/ExternalEffectReference"
+            }
+          },
+          "required": [
+            "kind",
+            "reference"
+          ]
+        }
       ]
     }
   }

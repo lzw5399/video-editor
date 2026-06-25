@@ -33,10 +33,10 @@ pub use delta::{
 };
 pub use draft::{Draft, DraftMetadata, DraftSchemaVersion};
 pub use effects::{
-    AudioRetimePolicy, BlendModeKind, CapabilityReportItem, CapabilitySupport, CapabilitySurface,
-    EffectCapabilityRegistry, EffectKind, ExternalEffectReference, Filter, FilterKind, MaskKind,
-    ProductionEffectCapabilityRegistry, RetimeMode, SegmentRetiming, SpeedCurvePoint, SpeedRatio,
-    Transition, TransitionKind, TransitionReference,
+    AudioRetimePolicy, BlendModeKind, CapabilityCategory, CapabilityReportItem, CapabilitySupport,
+    CapabilitySurface, EffectCapabilityRegistry, EffectKind, ExternalEffectReference, Filter,
+    FilterKind, MaskKind, ProductionEffectCapabilityRegistry, RetimeMode, SegmentRetiming,
+    SpeedCurvePoint, SpeedRatio, Transition, TransitionKind, TransitionReference,
 };
 pub use font_registry::{
     BUNDLED_SERIF_TEXT_FONT_FAMILY, BUNDLED_SERIF_TEXT_FONT_LICENSE_PATH,

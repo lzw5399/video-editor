@@ -314,6 +314,14 @@
       "title": "AudioPreviewStatusResponse",
       "type": "object"
     },
+    "AudioRetimePolicy": {
+      "enum": [
+        "followVideoSpeed",
+        "preservePitch",
+        "muteUnsupported"
+      ],
+      "type": "string"
+    },
     "CancelExportCommandPayload": {
       "additionalProperties": false,
       "description": "Payload accepted by the Phase 5 export cancellation command.",
@@ -2188,24 +2196,128 @@
       ],
       "type": "object"
     },
-    "Filter": {
+    "ExternalEffectReference": {
       "additionalProperties": false,
       "properties": {
-        "name": {
+        "displayName": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "effectId": {
           "type": "string"
         },
-        "parameters": {
-          "additionalProperties": {
-            "type": "string"
-          },
-          "type": "object"
+        "provider": {
+          "type": "string"
         }
       },
       "required": [
-        "name",
-        "parameters"
+        "provider",
+        "effectId"
       ],
       "type": "object"
+    },
+    "Filter": {
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "default": true,
+          "type": "boolean"
+        },
+        "kind": {
+          "$ref": "#/$defs/FilterKind"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "type": "object"
+    },
+    "FilterKind": {
+      "oneOf": [
+        {
+          "properties": {
+            "kind": {
+              "const": "gaussianBlur",
+              "type": "string"
+            },
+            "radiusMillis": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "radiusMillis"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "brightnessMillis": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "contrastMillis": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "basicColorAdjustment",
+              "type": "string"
+            },
+            "saturationMillis": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "brightnessMillis",
+            "contrastMillis",
+            "saturationMillis"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "kind": {
+              "const": "opacityAdjustment",
+              "type": "string"
+            },
+            "opacityMillis": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "opacityMillis"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "kind": {
+              "const": "externalReference",
+              "type": "string"
+            },
+            "reference": {
+              "$ref": "#/$defs/ExternalEffectReference"
+            }
+          },
+          "required": [
+            "kind",
+            "reference"
+          ],
+          "type": "object"
+        }
+      ]
     },
     "GetExportJobStatusCommandPayload": {
       "additionalProperties": false,
@@ -2614,6 +2726,45 @@
         "denominator"
       ],
       "type": "object"
+    },
+    "RetimeMode": {
+      "oneOf": [
+        {
+          "properties": {
+            "kind": {
+              "const": "constant",
+              "type": "string"
+            },
+            "speed": {
+              "$ref": "#/$defs/SpeedRatio"
+            }
+          },
+          "required": [
+            "kind",
+            "speed"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "kind": {
+              "const": "speedCurve",
+              "type": "string"
+            },
+            "points": {
+              "items": {
+                "$ref": "#/$defs/SpeedCurvePoint"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "kind",
+            "points"
+          ],
+          "type": "object"
+        }
+      ]
     },
     "RuntimeBinaryCapability": {
       "additionalProperties": false,
@@ -3337,6 +3488,19 @@
         "materialId": {
           "$ref": "#/$defs/MaterialId"
         },
+        "retiming": {
+          "$ref": "#/$defs/SegmentRetiming",
+          "default": {
+            "audioPolicy": "followVideoSpeed",
+            "mode": {
+              "kind": "constant",
+              "speed": {
+                "denominator": 1,
+                "numerator": 1
+              }
+            }
+          }
+        },
         "segmentId": {
           "$ref": "#/$defs/SegmentId"
         },
@@ -3574,16 +3738,40 @@
         {
           "properties": {
             "kind": {
-              "const": "unsupported",
-              "type": "string"
-            },
-            "name": {
+              "const": "multiply",
               "type": "string"
             }
           },
           "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "kind": {
+              "const": "screen",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "kind": {
+              "const": "externalReference",
+              "type": "string"
+            },
+            "reference": {
+              "$ref": "#/$defs/ExternalEffectReference"
+            }
+          },
+          "required": [
             "kind",
-            "name"
+            "reference"
           ],
           "type": "object"
         }
@@ -3648,17 +3836,101 @@
         },
         {
           "properties": {
+            "featherMillis": {
+              "default": 0,
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "heightMillis": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
             "kind": {
-              "const": "unsupported",
+              "const": "rectangle",
               "type": "string"
             },
-            "name": {
-              "type": "string"
+            "widthMillis": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "xMillis": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "yMillis": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
             }
           },
           "required": [
             "kind",
-            "name"
+            "xMillis",
+            "yMillis",
+            "widthMillis",
+            "heightMillis"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "featherMillis": {
+              "default": 0,
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "heightMillis": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "ellipse",
+              "type": "string"
+            },
+            "widthMillis": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "xMillis": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "yMillis": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "xMillis",
+            "yMillis",
+            "widthMillis",
+            "heightMillis"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "kind": {
+              "const": "externalReference",
+              "type": "string"
+            },
+            "reference": {
+              "$ref": "#/$defs/ExternalEffectReference"
+            }
+          },
+          "required": [
+            "kind",
+            "reference"
           ],
           "type": "object"
         }
@@ -3693,6 +3965,22 @@
       "required": [
         "x",
         "y"
+      ],
+      "type": "object"
+    },
+    "SegmentRetiming": {
+      "additionalProperties": false,
+      "properties": {
+        "audioPolicy": {
+          "$ref": "#/$defs/AudioRetimePolicy",
+          "default": "followVideoSpeed"
+        },
+        "mode": {
+          "$ref": "#/$defs/RetimeMode"
+        }
+      },
+      "required": [
+        "mode"
       ],
       "type": "object"
     },
@@ -3820,6 +4108,42 @@
       "required": [
         "start",
         "duration"
+      ],
+      "type": "object"
+    },
+    "SpeedCurvePoint": {
+      "additionalProperties": false,
+      "properties": {
+        "speed": {
+          "$ref": "#/$defs/SpeedRatio"
+        },
+        "targetTime": {
+          "$ref": "#/$defs/Microseconds"
+        }
+      },
+      "required": [
+        "targetTime",
+        "speed"
+      ],
+      "type": "object"
+    },
+    "SpeedRatio": {
+      "additionalProperties": false,
+      "properties": {
+        "denominator": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "numerator": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "numerator",
+        "denominator"
       ],
       "type": "object"
     },
@@ -24288,15 +24612,57 @@
         "duration": {
           "$ref": "#/$defs/Microseconds"
         },
-        "name": {
-          "type": "string"
+        "reference": {
+          "$ref": "#/$defs/TransitionReference"
         }
       },
       "required": [
-        "name",
+        "reference",
         "duration"
       ],
       "type": "object"
+    },
+    "TransitionKind": {
+      "enum": [
+        "dissolve"
+      ],
+      "type": "string"
+    },
+    "TransitionReference": {
+      "oneOf": [
+        {
+          "properties": {
+            "kind": {
+              "const": "firstParty",
+              "type": "string"
+            },
+            "transition": {
+              "$ref": "#/$defs/TransitionKind"
+            }
+          },
+          "required": [
+            "kind",
+            "transition"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "kind": {
+              "const": "externalReference",
+              "type": "string"
+            },
+            "reference": {
+              "$ref": "#/$defs/ExternalEffectReference"
+            }
+          },
+          "required": [
+            "kind",
+            "reference"
+          ],
+          "type": "object"
+        }
+      ]
     },
     "WaveformDisplayPeak": {
       "additionalProperties": false,
