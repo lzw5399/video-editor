@@ -1,10 +1,11 @@
 use draft_model::{
-    AudioRetimePolicy, MaterialId, Microseconds, RetimeMode, SegmentId, SourceTimerange,
-    SpeedCurvePoint, SpeedRatio, TargetTimerange, TrackId, TransitionKind, TransitionReference,
+    AudioRetimePolicy, FilterKind, MaterialId, Microseconds, RetimeMode, SegmentId,
+    SourceTimerange, SpeedCurvePoint, SpeedRatio, TargetTimerange, TrackId, TransitionKind,
+    TransitionReference,
 };
 use render_graph::{
-    RenderAudioMixDiagnostic, RenderIntentSupport, RenderRetimeIntent, RenderRetimeSourceMapping,
-    RenderTransitionIntent,
+    RenderAudioMixDiagnostic, RenderFilterIntent, RenderIntentSupport, RenderRetimeIntent,
+    RenderRetimeSourceMapping, RenderTransitionIntent,
 };
 
 use crate::job::format_seconds;
@@ -39,6 +40,51 @@ pub fn compile_dissolve_transition_filter(
         duration = format_seconds(transition.duration),
         offset = format_seconds(offset),
     ))
+}
+
+pub fn compile_production_effect_filters(filters: &[RenderFilterIntent]) -> Vec<String> {
+    let mut ordered_filters = filters.iter().collect::<Vec<_>>();
+    ordered_filters.sort_by_key(|filter| filter.order_index);
+    ordered_filters
+        .into_iter()
+        .filter(|filter| filter.enabled && filter.support == RenderIntentSupport::Supported)
+        .filter_map(compile_production_effect_filter)
+        .collect()
+}
+
+fn compile_production_effect_filter(filter: &RenderFilterIntent) -> Option<String> {
+    match &filter.kind {
+        FilterKind::GaussianBlur { radius_millis } => {
+            let sigma = blur_radius_pixels(*radius_millis);
+            if sigma <= 0.0 {
+                return None;
+            }
+            Some(format!("gblur=sigma={sigma:.6}"))
+        }
+        FilterKind::BasicColorAdjustment {
+            brightness_millis,
+            contrast_millis,
+            saturation_millis,
+        } => {
+            let brightness = decimal_from_signed_millis(*brightness_millis, -1_000, 1_000);
+            let contrast = decimal_from_millis(*contrast_millis, 0, 4_000);
+            let saturation = decimal_from_millis(*saturation_millis, 0, 4_000);
+            if brightness == 0.0 && contrast == 1.0 && saturation == 1.0 {
+                return None;
+            }
+            Some(format!(
+                "eq=brightness={brightness:.6}:contrast={contrast:.6}:saturation={saturation:.6}"
+            ))
+        }
+        FilterKind::OpacityAdjustment { opacity_millis } => {
+            let opacity = decimal_from_millis(*opacity_millis, 0, 1_000);
+            if opacity >= 1.0 {
+                return None;
+            }
+            Some(format!("format=rgba,colorchannelmixer=aa={opacity:.6}"))
+        }
+        FilterKind::ExternalReference { .. } => None,
+    }
 }
 
 pub fn compile_video_retime_filters(
@@ -251,4 +297,16 @@ fn scale_duration(value: u64, numerator: u64, denominator: u64) -> u64 {
 fn apply_ratio_floor(value: Microseconds, speed: &SpeedRatio) -> u64 {
     ((u128::from(value.get()) * u128::from(speed.numerator)) / u128::from(speed.denominator.max(1)))
         .min(u128::from(u64::MAX)) as u64
+}
+
+fn blur_radius_pixels(radius_millis: u32) -> f64 {
+    decimal_from_millis(radius_millis.saturating_mul(8), 0, 16_000)
+}
+
+fn decimal_from_millis(value: u32, min: u32, max: u32) -> f64 {
+    f64::from(value.clamp(min, max)) / 1_000.0
+}
+
+fn decimal_from_signed_millis(value: i32, min: i32, max: i32) -> f64 {
+    f64::from(value.clamp(min, max)) / 1_000.0
 }

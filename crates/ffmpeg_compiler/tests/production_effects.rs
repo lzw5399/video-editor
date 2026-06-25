@@ -227,8 +227,7 @@ fn phase19_production_effects_compiler_emits_first_party_filter_stack_from_graph
     );
     assert!(
         !job.visual_diagnostics.iter().any(|diagnostic| {
-            diagnostic.property == "filter"
-                && diagnostic.support != RenderIntentSupport::Supported
+            diagnostic.property == "filter" && diagnostic.support != RenderIntentSupport::Supported
         }),
         "supported first-party filters should not emit unsupported export diagnostics"
     );
@@ -385,10 +384,7 @@ fn transition_segment(
 }
 
 fn effect_stack_export_plan(filters: Vec<Filter>) -> RenderGraphPlan {
-    let mut draft = Draft::new(
-        "phase19-effect-compiler",
-        "Phase 19 Effect Compiler",
-    );
+    let mut draft = Draft::new("phase19-effect-compiler", "Phase 19 Effect Compiler");
     let mut material = Material::new(
         "video-material",
         MaterialKind::Video,

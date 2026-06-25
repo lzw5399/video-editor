@@ -13,7 +13,8 @@ use render_graph::{
 use serde::{Deserialize, Serialize};
 
 use crate::effects::{
-    compile_audio_retime_filters, compile_dissolve_transition_filter, compile_video_retime_filters,
+    compile_audio_retime_filters, compile_dissolve_transition_filter,
+    compile_production_effect_filters, compile_video_retime_filters,
     retimed_source_timerange_for_output,
 };
 use crate::job::{
@@ -27,6 +28,7 @@ const PHASE19_PRODUCTION_EFFECT_COMPILER_MARKERS: &[&str] = &[
     "RenderTransitionWindow",
     "ProductionEffectCapabilityDecision",
     "UnsupportedProductionEffect",
+    "compile_production_effect_filters",
     "xfade",
 ];
 
@@ -338,6 +340,13 @@ fn compile_visual_layer(
     let active_start = target_delay_from_output(&layer.target_timerange, output_timerange(plan));
     let active_end = Microseconds::new(active_start.get().saturating_add(clip.duration.get()));
     if is_full_canvas_identity(&layer.visual) {
+        let mut filters = visual_source_filters(layer, clip, active_start, plan);
+        filters.push(format!(
+            "scale={width}:{height}",
+            width = output_dimensions.width,
+            height = output_dimensions.height
+        ));
+        filters.extend(compile_production_effect_filters(&layer.filters));
         return VisualLayerFilter {
             segment_id: layer.segment_id.clone(),
             label: label.clone(),
@@ -345,12 +354,7 @@ fn compile_visual_layer(
             placement: LayerPlacement { x: 0, y: 0 },
             active_start,
             active_end,
-            lines: vec![format!(
-                "[{input_index}:v]{source_filters},scale={width}:{height}[{label}]",
-                source_filters = visual_source_filters(layer, clip, active_start, plan).join(","),
-                width = output_dimensions.width,
-                height = output_dimensions.height
-            )],
+            lines: vec![format!("[{input_index}:v]{}[{label}]", filters.join(","))],
         };
     }
 
@@ -406,6 +410,16 @@ fn compile_visual_layer(
         ));
         current_label = composed_label;
         current_dimensions = output_dimensions;
+    }
+
+    let effect_filters = compile_production_effect_filters(&layer.filters);
+    if !effect_filters.is_empty() {
+        let effect_label = format!("vstage{layer_index}effects");
+        lines.push(format!(
+            "[{current_label}]{}[{effect_label}]",
+            effect_filters.join(",")
+        ));
+        current_label = effect_label;
     }
 
     let scaled_dimensions = scaled_dimensions(current_dimensions, &layer.visual.transform.scale);

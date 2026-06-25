@@ -135,6 +135,10 @@ run_self_test() {
     "non-compiler FFmpeg retime filter string" \
     "$FFMPEG_RETIME_FILTER_PATTERN" \
     'const filter = "setpts=PTS-STARTPTS";'
+  assert_pattern_rejects \
+    "non-compiler FFmpeg effect filter string" \
+    "$FFMPEG_EFFECT_FILTER_PATTERN" \
+    'const filter = "gblur=sigma=2.000000";'
   echo "phase19 source guard self-test passed"
 }
 
