@@ -3,7 +3,10 @@ use bindings_node::{
     commit_project_interaction, execute_project_intent, open_project_session,
     update_project_interaction,
 };
-use draft_model::Draft;
+use draft_model::{
+    Draft, Filter, Material, MaterialKind, Microseconds, Segment, SegmentId, SourceTimerange,
+    TargetTimerange, Track, TrackKind, TrackTransition,
+};
 use project_store::{StdPlatformFileSystem, open_project_bundle, save_project_bundle};
 use serde_json::{Value, json};
 use std::fs;
@@ -659,6 +662,337 @@ fn project_interaction_session_rejects_stale_base_revision() {
         .expect("closeProjectSession should return an envelope");
 }
 
+#[test]
+fn phase19_retime_effect_mask_blend_interactions_update_provisionally_and_commit_once() {
+    let temp_dir = tempfile::tempdir().expect("tempdir should be created");
+    let bundle_path = temp_dir.path().join("interaction-phase19-segment.veproj");
+    let revision =
+        open_phase19_session_with_selected_segment(&bundle_path, "interaction-phase19-segment");
+
+    let retime_begin = begin_project_interaction(json!({
+        "sessionId": "interaction-phase19-segment",
+        "expectedRevision": revision,
+        "kind": "selectedSegmentRetime"
+    }))
+    .expect("begin retime interaction should return an envelope");
+    assert_eq!(retime_begin["ok"], true, "{retime_begin:#}");
+    let retime_id = retime_begin["data"]["interactionId"]
+        .as_str()
+        .expect("begin should return retime interaction id")
+        .to_owned();
+    let before_retime = project_json_bytes(&bundle_path);
+    let retimed = update_project_interaction(json!({
+        "sessionId": "interaction-phase19-segment",
+        "expectedRevision": revision,
+        "interactionId": retime_id,
+        "sequence": 1,
+        "payload": {
+            "kind": "selectedSegmentRetime",
+            "retiming": {
+                "mode": {
+                    "kind": "constant",
+                    "speed": { "numerator": 1, "denominator": 2 }
+                },
+                "audioPolicy": "followVideoSpeed"
+            }
+        }
+    }))
+    .expect("retime update should return an envelope");
+    assert_eq!(retimed["ok"], true, "{retimed:#}");
+    assert_eq!(retimed["data"]["kind"], "selectedSegmentRetime");
+    assert_eq!(retimed["data"]["revision"], revision);
+    assert_eq!(retimed["data"]["revisionUnchanged"], true);
+    assert_eq!(retimed["data"]["acceptedSequence"], 1);
+    assert_eq!(retimed["data"]["coalescedThrough"], 1);
+    assert_eq!(
+        retimed["data"]["provisionalDelta"]["command"],
+        "setSegmentRetime"
+    );
+    assert_eq!(project_json_bytes(&bundle_path), before_retime);
+
+    let stale_retime = update_project_interaction(json!({
+        "sessionId": "interaction-phase19-segment",
+        "expectedRevision": revision,
+        "interactionId": retimed["data"]["interactionId"],
+        "sequence": 1,
+        "payload": {
+            "kind": "selectedSegmentRetime",
+            "retiming": {
+                "mode": {
+                    "kind": "constant",
+                    "speed": { "numerator": 1, "denominator": 1 }
+                },
+                "audioPolicy": "followVideoSpeed"
+            }
+        }
+    }))
+    .expect("stale retime update should return an envelope");
+    assert_eq!(stale_retime["ok"], false, "{stale_retime:#}");
+
+    let retime_commit = commit_project_interaction(json!({
+        "sessionId": "interaction-phase19-segment",
+        "expectedRevision": revision,
+        "interactionId": retimed["data"]["interactionId"]
+    }))
+    .expect("retime commit should return an envelope");
+    assert_eq!(retime_commit["ok"], true, "{retime_commit:#}");
+    assert_eq!(retime_commit["data"]["revision"], revision + 1);
+    assert_eq!(retime_commit["data"]["delta"]["command"], "setSegmentRetime");
+    assert_eq!(
+        retime_commit["data"]["viewModel"]["editControls"]["canUndo"],
+        true
+    );
+    let reopened_retime = open_project_bundle(&StdPlatformFileSystem, &bundle_path)
+        .expect("retime commit should save canonical project.json once");
+    assert_eq!(
+        reopened_retime.bundle.draft.tracks[0].segments[0]
+            .retiming
+            .mode,
+        serde_json::from_value(json!({
+            "kind": "constant",
+            "speed": { "numerator": 1, "denominator": 2 }
+        }))
+        .expect("retime mode should parse")
+    );
+
+    let revision = revision + 1;
+    let effect_begin = begin_project_interaction(json!({
+        "sessionId": "interaction-phase19-segment",
+        "expectedRevision": revision,
+        "kind": "selectedSegmentEffect"
+    }))
+    .expect("begin effect interaction should return an envelope");
+    assert_eq!(effect_begin["ok"], true, "{effect_begin:#}");
+    let effect_id = effect_begin["data"]["interactionId"]
+        .as_str()
+        .expect("begin should return effect interaction id")
+        .to_owned();
+    let before_effect = project_json_bytes(&bundle_path);
+    let effected = update_project_interaction(json!({
+        "sessionId": "interaction-phase19-segment",
+        "expectedRevision": revision,
+        "interactionId": effect_id,
+        "sequence": 1,
+        "payload": {
+            "kind": "selectedSegmentEffect",
+            "effectIndex": 0,
+            "parameter": {
+                "parameter": "gaussianBlurRadiusMillis",
+                "radiusMillis": 750
+            }
+        }
+    }))
+    .expect("effect update should return an envelope");
+    assert_eq!(effected["ok"], true, "{effected:#}");
+    assert_eq!(effected["data"]["revision"], revision);
+    assert_eq!(effected["data"]["revisionUnchanged"], true);
+    assert_eq!(
+        effected["data"]["provisionalDelta"]["command"],
+        "updateSegmentEffectParameter"
+    );
+    assert_eq!(project_json_bytes(&bundle_path), before_effect);
+    let effect_commit = commit_project_interaction(json!({
+        "sessionId": "interaction-phase19-segment",
+        "expectedRevision": revision,
+        "interactionId": effected["data"]["interactionId"]
+    }))
+    .expect("effect commit should return an envelope");
+    assert_eq!(effect_commit["ok"], true, "{effect_commit:#}");
+    assert_eq!(effect_commit["data"]["revision"], revision + 1);
+    assert_eq!(
+        effect_commit["data"]["delta"]["command"],
+        "updateSegmentEffectParameter"
+    );
+    let reopened_effect = open_project_bundle(&StdPlatformFileSystem, &bundle_path)
+        .expect("effect commit should save canonical project.json once");
+    assert_eq!(
+        serde_json::to_value(&reopened_effect.bundle.draft.tracks[0].segments[0].filters[0])
+            .expect("filter should serialize")["kind"]["radiusMillis"],
+        750
+    );
+
+    let revision = revision + 1;
+    let mask_begin = begin_project_interaction(json!({
+        "sessionId": "interaction-phase19-segment",
+        "expectedRevision": revision,
+        "kind": "selectedSegmentMask"
+    }))
+    .expect("begin mask interaction should return an envelope");
+    assert_eq!(mask_begin["ok"], true, "{mask_begin:#}");
+    let mask_id = mask_begin["data"]["interactionId"]
+        .as_str()
+        .expect("begin should return mask interaction id")
+        .to_owned();
+    let before_mask = project_json_bytes(&bundle_path);
+    let masked = update_project_interaction(json!({
+        "sessionId": "interaction-phase19-segment",
+        "expectedRevision": revision,
+        "interactionId": mask_id,
+        "sequence": 1,
+        "payload": {
+            "kind": "selectedSegmentMask",
+            "mask": {
+                "kind": "rectangle",
+                "xMillis": 100,
+                "yMillis": 120,
+                "widthMillis": 500,
+                "heightMillis": 400,
+                "featherMillis": 40,
+                "opacityMillis": 900,
+                "inverted": false
+            }
+        }
+    }))
+    .expect("mask update should return an envelope");
+    assert_eq!(masked["ok"], true, "{masked:#}");
+    assert_eq!(masked["data"]["revision"], revision);
+    assert_eq!(masked["data"]["revisionUnchanged"], true);
+    assert_eq!(
+        masked["data"]["provisionalDelta"]["command"],
+        "updateSegmentVisual"
+    );
+    assert_eq!(project_json_bytes(&bundle_path), before_mask);
+    let mask_commit = commit_project_interaction(json!({
+        "sessionId": "interaction-phase19-segment",
+        "expectedRevision": revision,
+        "interactionId": masked["data"]["interactionId"]
+    }))
+    .expect("mask commit should return an envelope");
+    assert_eq!(mask_commit["ok"], true, "{mask_commit:#}");
+    assert_eq!(mask_commit["data"]["revision"], revision + 1);
+    let reopened_mask = open_project_bundle(&StdPlatformFileSystem, &bundle_path)
+        .expect("mask commit should save canonical project.json once");
+    assert_eq!(
+        serde_json::to_value(&reopened_mask.bundle.draft.tracks[0].segments[0].visual.mask)
+            .expect("mask should serialize")["kind"],
+        "rectangle"
+    );
+
+    let revision = revision + 1;
+    let blend_begin = begin_project_interaction(json!({
+        "sessionId": "interaction-phase19-segment",
+        "expectedRevision": revision,
+        "kind": "selectedSegmentBlend"
+    }))
+    .expect("begin blend interaction should return an envelope");
+    assert_eq!(blend_begin["ok"], true, "{blend_begin:#}");
+    let blend_id = blend_begin["data"]["interactionId"]
+        .as_str()
+        .expect("begin should return blend interaction id")
+        .to_owned();
+    let before_blend = project_json_bytes(&bundle_path);
+    let blended = update_project_interaction(json!({
+        "sessionId": "interaction-phase19-segment",
+        "expectedRevision": revision,
+        "interactionId": blend_id,
+        "sequence": 1,
+        "payload": {
+            "kind": "selectedSegmentBlend",
+            "opacityMillis": 650
+        }
+    }))
+    .expect("blend opacity update should return an envelope");
+    assert_eq!(blended["ok"], true, "{blended:#}");
+    assert_eq!(blended["data"]["revision"], revision);
+    assert_eq!(blended["data"]["revisionUnchanged"], true);
+    assert_eq!(
+        blended["data"]["provisionalDelta"]["command"],
+        "updateSegmentVisual"
+    );
+    assert_eq!(project_json_bytes(&bundle_path), before_blend);
+    let blend_commit = commit_project_interaction(json!({
+        "sessionId": "interaction-phase19-segment",
+        "expectedRevision": revision,
+        "interactionId": blended["data"]["interactionId"]
+    }))
+    .expect("blend commit should return an envelope");
+    assert_eq!(blend_commit["ok"], true, "{blend_commit:#}");
+    assert_eq!(blend_commit["data"]["revision"], revision + 1);
+    let reopened_blend = open_project_bundle(&StdPlatformFileSystem, &bundle_path)
+        .expect("blend commit should save canonical project.json once");
+    assert_eq!(
+        reopened_blend.bundle.draft.tracks[0].segments[0]
+            .visual
+            .transform
+            .opacity
+            .value_millis,
+        650
+    );
+
+    close_project_session(json!({ "sessionId": "interaction-phase19-segment" }))
+        .expect("closeProjectSession should return an envelope");
+}
+
+#[test]
+fn phase19_transition_duration_interaction_updates_provisionally_and_commits_once() {
+    let temp_dir = tempfile::tempdir().expect("tempdir should be created");
+    let bundle_path = temp_dir.path().join("interaction-phase19-transition.veproj");
+    let revision =
+        open_phase19_session_with_selected_segment(&bundle_path, "interaction-phase19-transition");
+
+    let begin = begin_project_interaction(json!({
+        "sessionId": "interaction-phase19-transition",
+        "expectedRevision": revision,
+        "kind": "selectedTransitionDuration"
+    }))
+    .expect("begin transition duration interaction should return an envelope");
+    assert_eq!(begin["ok"], true, "{begin:#}");
+    let interaction_id = begin["data"]["interactionId"]
+        .as_str()
+        .expect("begin should return transition duration interaction id")
+        .to_owned();
+    let before_update = project_json_bytes(&bundle_path);
+
+    let updated = update_project_interaction(json!({
+        "sessionId": "interaction-phase19-transition",
+        "expectedRevision": revision,
+        "interactionId": interaction_id,
+        "sequence": 1,
+        "payload": {
+            "kind": "selectedTransitionDuration",
+            "fromSegmentId": "left-segment",
+            "toSegmentId": "right-segment",
+            "duration": 250_000
+        }
+    }))
+    .expect("transition duration update should return an envelope");
+    assert_eq!(updated["ok"], true, "{updated:#}");
+    assert_eq!(updated["data"]["kind"], "selectedTransitionDuration");
+    assert_eq!(updated["data"]["revision"], revision);
+    assert_eq!(updated["data"]["revisionUnchanged"], true);
+    assert_eq!(
+        updated["data"]["provisionalDelta"]["command"],
+        "updateTransitionDuration"
+    );
+    assert_eq!(
+        project_json_bytes(&bundle_path),
+        before_update,
+        "transition duration update must not save project.json"
+    );
+
+    let committed = commit_project_interaction(json!({
+        "sessionId": "interaction-phase19-transition",
+        "expectedRevision": revision,
+        "interactionId": updated["data"]["interactionId"]
+    }))
+    .expect("transition duration commit should return an envelope");
+    assert_eq!(committed["ok"], true, "{committed:#}");
+    assert_eq!(committed["data"]["revision"], revision + 1);
+    assert_eq!(
+        committed["data"]["delta"]["command"],
+        "updateTransitionDuration"
+    );
+    let reopened = open_project_bundle(&StdPlatformFileSystem, &bundle_path)
+        .expect("transition duration commit should save canonical project.json once");
+    assert_eq!(
+        reopened.bundle.draft.tracks[0].transitions[0].duration,
+        Microseconds::new(250_000)
+    );
+
+    close_project_session(json!({ "sessionId": "interaction-phase19-transition" }))
+        .expect("closeProjectSession should return an envelope");
+}
+
 fn open_session_with_selected_segment(bundle_path: &std::path::Path, session_id: &str) -> u64 {
     save_timeline_draft(bundle_path);
     let opened = open_project_session(json!({
@@ -681,6 +1015,33 @@ fn open_session_with_selected_segment(bundle_path: &std::path::Path, session_id:
     added["data"]["revision"]
         .as_u64()
         .expect("add segment should return revision")
+}
+
+fn open_phase19_session_with_selected_segment(
+    bundle_path: &std::path::Path,
+    session_id: &str,
+) -> u64 {
+    save_phase19_interaction_draft(bundle_path);
+    let opened = open_project_session(json!({
+        "bundlePath": bundle_path.display().to_string(),
+        "sessionId": session_id
+    }))
+    .expect("openProjectSession should return an envelope");
+    assert_eq!(opened["ok"], true, "{opened:#}");
+
+    let selected = execute_project_intent(json!({
+        "sessionId": session_id,
+        "expectedRevision": 0,
+        "intent": {
+            "kind": "selectTimelineItemIntent",
+            "itemHandle": "timeline-segment:video-track:left-segment"
+        }
+    }))
+    .expect("selectTimelineItemIntent should return an envelope");
+    assert_eq!(selected["ok"], true, "{selected:#}");
+    selected["data"]["revision"]
+        .as_u64()
+        .expect("selection should return revision")
 }
 
 fn begin_visual_interaction(session_id: &str, revision: u64) -> Value {
@@ -752,6 +1113,42 @@ fn save_timeline_draft(bundle_path: &std::path::Path) {
         serde_json::from_value(timeline_draft_json()).expect("timeline draft fixture should parse");
     save_project_bundle(&StdPlatformFileSystem, bundle_path, &draft)
         .expect("timeline draft fixture should be saved");
+}
+
+fn save_phase19_interaction_draft(bundle_path: &std::path::Path) {
+    let mut draft = Draft::new("phase19-interaction-draft", "Phase 19 Interaction Draft");
+    draft.materials.push(Material::new(
+        "video-material",
+        MaterialKind::Video,
+        "file://video.mp4",
+        "video.mp4",
+    ));
+
+    let mut left_segment = Segment::new(
+        "left-segment",
+        "video-material",
+        SourceTimerange::new(0, 1_000_000),
+        TargetTimerange::new(0, 1_000_000),
+    );
+    left_segment.filters.push(Filter::gaussian_blur(500));
+    let right_segment = Segment::new(
+        "right-segment",
+        "video-material",
+        SourceTimerange::new(1_000_000, 1_000_000),
+        TargetTimerange::new(1_000_000, 1_000_000),
+    );
+    let mut track = Track::new("video-track", TrackKind::Video, "Video");
+    track.segments.push(left_segment);
+    track.segments.push(right_segment);
+    track.transitions.push(TrackTransition::dissolve(
+        SegmentId::from("left-segment"),
+        SegmentId::from("right-segment"),
+        Microseconds::new(300_000),
+    ));
+    draft.tracks.push(track);
+
+    save_project_bundle(&StdPlatformFileSystem, bundle_path, &draft)
+        .expect("phase19 interaction draft fixture should be saved");
 }
 
 fn timeline_draft_json() -> Value {

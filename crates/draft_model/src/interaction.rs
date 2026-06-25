@@ -107,4 +107,35 @@ mod tests {
         assert_eq!(session.accept_sequence(2), Ok(()));
         assert_eq!(session.accepted_sequence, 2);
     }
+
+    #[test]
+    fn phase19_interaction_kinds_are_explicit_bridge_contracts() {
+        for (kind, expected) in [
+            (
+                ProjectInteractionKind::SelectedSegmentRetime,
+                "selectedSegmentRetime",
+            ),
+            (
+                ProjectInteractionKind::SelectedSegmentEffect,
+                "selectedSegmentEffect",
+            ),
+            (
+                ProjectInteractionKind::SelectedSegmentMask,
+                "selectedSegmentMask",
+            ),
+            (
+                ProjectInteractionKind::SelectedSegmentBlend,
+                "selectedSegmentBlend",
+            ),
+            (
+                ProjectInteractionKind::SelectedTransitionDuration,
+                "selectedTransitionDuration",
+            ),
+        ] {
+            assert_eq!(
+                serde_json::to_value(kind).expect("interaction kind should serialize"),
+                serde_json::json!(expected)
+            );
+        }
+    }
 }
