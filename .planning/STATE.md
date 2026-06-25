@@ -5,15 +5,15 @@ milestone_name: milestone
 current_phase: 19
 current_phase_name: production-effects-retiming-and-transition-semantics
 status: executing
-stopped_at: Completed 19-10-PLAN.md
-last_updated: "2026-06-25T11:41:56.939Z"
+stopped_at: Completed 19-11-PLAN.md
+last_updated: "2026-06-25T12:24:05.765Z"
 last_activity: 2026-06-25
 last_activity_desc: Phase 19 execution started
 progress:
   total_phases: 25
   completed_phases: 24
   total_plans: 187
-  completed_plans: 182
+  completed_plans: 183
   percent: 96
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 ## Current Position
 
 Phase: 19 (production-effects-retiming-and-transition-semantics) — EXECUTING
-Plan: 11 of 15
+Plan: 12 of 15
 Status: Ready to execute
 Last activity: 2026-06-25 — Phase 19 execution started
 
@@ -220,6 +220,7 @@ Progress: Phase 15.1, 15.2, 15.3, 16, 17, 17.1, and 18 are complete; Phase 19 is
 | Phase 19 P08 | 9 min | 1 tasks | 9 files |
 | Phase 19 P09 | 18 min | 2 tasks | 13 files |
 | Phase 19 P10 | 10 min | 1 tasks | 8 files |
+| Phase 19 P11 | 26min | 2 tasks | 15 files |
 
 ## Accumulated Context
 
@@ -644,6 +645,9 @@ Recent decisions affecting current work:
 - [Phase 19]: Mask and blend edits commit only after the Phase 19 capability registry reports first-party preview and export support. — Keeps unsupported or degraded masks/blends from becoming product-success semantics.
 - [Phase 19]: External provider mask and blend references remain unsupported diagnostics and cannot mutate first-party draft semantics. — Preserves the adapter/report boundary for private provider references.
 - [Phase 19]: Rectangle and ellipse masks persist normalized integer geometry, feather, opacity, and inversion fields in Rust-owned segment visual state. — Keeps mask semantics typed and portable for preview/export follow-up plans.
+- [Phase 19]: First-party rectangle/ellipse masks compile in ffmpeg_compiler as RGBA alpha expressions derived from typed render graph intent. — Keeps mask pixels owned by Rust compiler/export semantics instead of UI or renderer code.
+- [Phase 19]: Multiply/screen blend export remains unsupported until an alpha-correct FFmpeg blend compositor is implemented; jobs carry unsupported diagnostics and product-success metadata is false. — Avoids normal-overlay fallback being treated as a successful product export for unsupported blend semantics.
+- [Phase 19]: External mask/blend provider IDs stay out of filter scripts and appear only in typed diagnostics. — Preserves the adapter/report boundary for proprietary provider references.
 
 ### Pending Todos
 
@@ -725,6 +729,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-06-25T11:41:18.403Z
-Stopped at: Completed 19-10-PLAN.md
+Last session: 2026-06-25T12:24:05.757Z
+Stopped at: Completed 19-11-PLAN.md
 Resume file: None
