@@ -953,7 +953,7 @@ Plans:
 
 - [ ] 19-11-PLAN.md — Propagate masks/blends through graph, GPU preview, compiler diagnostics, and guards
 
-**Wave 10** *(blocked on Wave 9 completion)*
+**Wave 10** *(blocked on Wave 9 completion and 19-05 audio retiming completion)*
 
 - [ ] 19-12-PLAN.md — Expose Rust project-session command and interaction surfaces
 
