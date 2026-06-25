@@ -908,7 +908,7 @@ Plans:
   4. Masks, blend modes, blur, and complex effects use the production GPU preview path for realtime interaction and classify unsupported export paths.
   5. Complex Jianying/Kaipai-like template fixtures verify preview/export parity, fallback reports, and performance budgets for production editing scenarios.
 
-**Plans**: 7/15 plans executed
+**Plans**: 8/15 plans executed
 
 Plans:
 
@@ -939,7 +939,7 @@ Plans:
 
 **Wave 6** *(blocked on Wave 5 completion)*
 
-- [ ] 19-08-PLAN.md — Implement first-party effect/filter command semantics
+- [x] 19-08-PLAN.md — Implement first-party effect/filter command semantics
 
 **Wave 7** *(blocked on Wave 6 completion)*
 
@@ -999,4 +999,4 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 04.1 -> 5 -> 6 -> 7 -> 8 ->
 | 16. Task Scheduler, Job Isolation, And Performance Telemetry | 8/8 | Complete    | 2026-06-24 |
 | 17. Template Import Core And Kaipai Offline Adapter Foundation | 10/10 | Complete   | 2026-06-24 |
 | 18. Mobile/Server Binding Architecture And Runtime Ports | 6/6 | Complete    | 2026-06-25 |
-| 19. Production Effects, Retiming, And Transition Semantics | 7/15 | In Progress|  |
+| 19. Production Effects, Retiming, And Transition Semantics | 8/15 | In Progress|  |

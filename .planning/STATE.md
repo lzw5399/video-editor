@@ -5,15 +5,15 @@ milestone_name: milestone
 current_phase: 19
 current_phase_name: production-effects-retiming-and-transition-semantics
 status: executing
-stopped_at: Completed 19-07-PLAN.md
-last_updated: "2026-06-25T10:38:16.592Z"
+stopped_at: Completed 19-08-PLAN.md
+last_updated: "2026-06-25T10:54:40.136Z"
 last_activity: 2026-06-25
 last_activity_desc: Phase 19 execution started
 progress:
   total_phases: 25
   completed_phases: 24
   total_plans: 187
-  completed_plans: 179
+  completed_plans: 180
   percent: 96
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 ## Current Position
 
 Phase: 19 (production-effects-retiming-and-transition-semantics) — EXECUTING
-Plan: 8 of 15
+Plan: 9 of 15
 Status: Ready to execute
 Last activity: 2026-06-25 — Phase 19 execution started
 
@@ -217,6 +217,7 @@ Progress: Phase 15.1, 15.2, 15.3, 16, 17, 17.1, and 18 are complete; Phase 19 is
 | Phase 19 P05 | 11 min | 2 tasks | 9 files |
 | Phase 19 P06 | 22 min | 2 tasks | 14 files |
 | Phase 19 P07 | 21 min | 2 tasks | 13 files |
+| Phase 19 P08 | 9 min | 1 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -632,6 +633,9 @@ Recent decisions affecting current work:
 - [Phase 19]: Plan 19-07 generates dissolve transition FFmpeg xfade filters only inside ffmpeg_compiler from typed RenderTransitionIntent values.
 - [Phase 19]: Plan 19-07 treats external transition references as unsupported diagnostics and never as successful export semantics.
 - [Phase 19]: Plan 19-07 allocates compiler transition labels per segment so chained relationships do not reuse consumed FFmpeg labels.
+- [Phase 19]: Effect edits commit only when the Phase 19 capability registry reports first-party preview and export support. — Keeps unsupported and degraded effects from becoming product-success semantics.
+- [Phase 19]: External provider effects stay explicit unsupported diagnostics and cannot be applied as supported first-party effects. — Preserves the adapter/report boundary for proprietary provider references.
+- [Phase 19]: Effect command parameter updates use typed integer millisecond payloads rather than renderer-owned parameter maps. — Keeps persisted effect semantics typed and Rust-owned under PRODFX-03.
 
 ### Pending Todos
 
@@ -713,6 +717,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-06-25T10:38:16.585Z
-Stopped at: Completed 19-07-PLAN.md
+Last session: 2026-06-25T10:53:54.187Z
+Stopped at: Completed 19-08-PLAN.md
 Resume file: None
