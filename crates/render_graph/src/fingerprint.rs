@@ -345,6 +345,8 @@ fn filter_fingerprint(
     fingerprint_parts(
         filter.node_id.clone(),
         &FilterSemanticInput {
+            order_index: filter.order_index,
+            enabled: filter.enabled,
             name: &filter.name,
             kind: &filter.kind,
             capability: &filter.capability,
@@ -573,6 +575,8 @@ struct TextOverlayInputFacts<'a> {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct FilterSemanticInput<'a> {
+    order_index: u32,
+    enabled: bool,
     name: &'a str,
     kind: &'a draft_model::FilterKind,
     capability: &'a crate::RenderEffectCapability,

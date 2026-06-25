@@ -2,6 +2,7 @@
 pub struct RealtimePreviewPipelineSet {
     pub canvas_pipeline_label: &'static str,
     pub textured_quad_pipeline_label: &'static str,
+    pub production_effect_uniform_label: &'static str,
 }
 
 impl RealtimePreviewPipelineSet {
@@ -9,6 +10,7 @@ impl RealtimePreviewPipelineSet {
         Self {
             canvas_pipeline_label: "realtime-preview-canvas",
             textured_quad_pipeline_label: "realtime-preview-textured-quad",
+            production_effect_uniform_label: "phase19-production-effect-uniforms",
         }
     }
 }

@@ -15,6 +15,7 @@ use render_graph::{
     RenderCanvasBackgroundMode, RenderGraph, RenderMaterial, RenderTextOverlay, RenderVideoLayer,
 };
 
+use crate::effects::{EffectPreviewUniforms, preview_effect_uniforms_for_layer};
 use crate::{
     PlaybackGeneration, PreviewFrameInput, PreviewFrameProvider,
     RealtimePreviewCapabilityClassifier, RealtimePreviewDiagnostic,
@@ -737,6 +738,16 @@ impl RealtimePreviewWgpuPipelines {
                     ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
                     count: None,
                 },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 2,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
             ],
         });
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
@@ -833,6 +844,16 @@ impl RealtimePreviewWgpuPipelines {
                                 binding: 1,
                                 visibility: wgpu::ShaderStages::FRAGMENT,
                                 ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                                count: None,
+                            },
+                            wgpu::BindGroupLayoutEntry {
+                                binding: 2,
+                                visibility: wgpu::ShaderStages::FRAGMENT,
+                                ty: wgpu::BindingType::Buffer {
+                                    ty: wgpu::BufferBindingType::Uniform,
+                                    has_dynamic_offset: false,
+                                    min_binding_size: None,
+                                },
                                 count: None,
                             },
                         ],
@@ -966,11 +987,13 @@ enum WgpuLayerResources {
     Texture {
         _texture: WgpuLayerTexture,
         _view: wgpu::TextureView,
+        _effect_uniform_buffer: wgpu::Buffer,
     },
     ExternalTexture {
         _planes: Rc<RealtimePreviewExternalTexturePlanes>,
         _views: [wgpu::TextureView; 2],
         _external_texture: wgpu::ExternalTexture,
+        _effect_uniform_buffer: wgpu::Buffer,
     },
 }
 
@@ -1149,6 +1172,11 @@ fn push_wgpu_video_layer_draw(
         }
     };
     let visual = sampled_visual_for(graph, layer).unwrap_or(&layer.visual);
+    let effect_uniforms = preview_effect_uniforms_for_layer(
+        layer,
+        material.width.unwrap_or(1),
+        material.height.unwrap_or(1),
+    );
     push_wgpu_layer_draw(
         device,
         queue,
@@ -1156,6 +1184,7 @@ fn push_wgpu_video_layer_draw(
         draws,
         texture,
         WgpuLayerSamplerKind::Linear,
+        effect_uniforms,
         textured_quad_vertices(target, material, visual),
     );
     Ok(())
@@ -1237,6 +1266,7 @@ fn push_wgpu_text_layer_draw(
         draws,
         WgpuLayerTexture::Imported(Rc::clone(&cached.texture)),
         text_layer_sampler_kind(&text.visual, raster_scale),
+        EffectPreviewUniforms::identity(cached.width, cached.height),
         textured_text_rect_vertices(
             target,
             TargetRect {
@@ -1339,6 +1369,7 @@ fn push_wgpu_ui_chrome_draws(
             draws,
             WgpuLayerTexture::Imported(texture),
             WgpuLayerSamplerKind::Text,
+            EffectPreviewUniforms::identity(1, 1),
             solid_rect_vertices_from_geometry(geometry, rect, 1.0),
         );
     }
@@ -1459,8 +1490,16 @@ fn push_wgpu_layer_draw(
     draws: &mut Vec<WgpuLayerDraw>,
     texture: WgpuLayerTexture,
     sampler_kind: WgpuLayerSamplerKind,
+    effect_uniforms: EffectPreviewUniforms,
     vertices: Vec<u8>,
 ) {
+    let effect_uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("realtime-preview-effect-uniforms"),
+        size: 32,
+        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+    });
+    queue.write_buffer(&effect_uniform_buffer, 0, &effect_uniforms.as_wgpu_bytes());
     let (layer_resources, bind_group, pipeline_kind) = match texture {
         WgpuLayerTexture::ExternalNv12 { planes, color } => {
             let Some(layout) = resources.external_bind_group_layout.as_ref() else {
@@ -1494,6 +1533,10 @@ fn push_wgpu_layer_draw(
                         binding: 1,
                         resource: wgpu::BindingResource::Sampler(&resources.linear_sampler),
                     },
+                    wgpu::BindGroupEntry {
+                        binding: 2,
+                        resource: effect_uniform_buffer.as_entire_binding(),
+                    },
                 ],
             });
             (
@@ -1501,6 +1544,7 @@ fn push_wgpu_layer_draw(
                     _planes: planes,
                     _views: views,
                     _external_texture: external_texture,
+                    _effect_uniform_buffer: effect_uniform_buffer,
                 },
                 bind_group,
                 WgpuLayerPipelineKind::ExternalTexture,
@@ -1525,12 +1569,17 @@ fn push_wgpu_layer_draw(
                             WgpuLayerSamplerKind::Text => &resources.text_sampler,
                         }),
                     },
+                    wgpu::BindGroupEntry {
+                        binding: 2,
+                        resource: effect_uniform_buffer.as_entire_binding(),
+                    },
                 ],
             });
             (
                 WgpuLayerResources::Texture {
                     _texture: texture,
                     _view: view,
+                    _effect_uniform_buffer: effect_uniform_buffer,
                 },
                 bind_group,
                 WgpuLayerPipelineKind::Texture,
@@ -1961,11 +2010,47 @@ fn vs_main(
 
 @group(0) @binding(0) var layer_texture: texture_2d<f32>;
 @group(0) @binding(1) var layer_sampler: sampler;
+struct EffectUniforms {
+    brightness: f32,
+    contrast: f32,
+    saturation: f32,
+    opacity: f32,
+    blur_radius_px: f32,
+    texel_width: f32,
+    texel_height: f32,
+    active: f32,
+};
+@group(0) @binding(2) var<uniform> effects: EffectUniforms;
+
+fn adjust_effect_color(color: vec4<f32>, vertex_opacity: f32) -> vec4<f32> {
+    let gray = dot(color.rgb, vec3<f32>(0.2126, 0.7152, 0.0722));
+    let saturated = vec3<f32>(gray) + (color.rgb - vec3<f32>(gray)) * effects.saturation;
+    let contrasted = (saturated - vec3<f32>(0.5)) * effects.contrast + vec3<f32>(0.5);
+    let brightened = clamp(contrasted + vec3<f32>(effects.brightness), vec3<f32>(0.0), vec3<f32>(1.0));
+    return vec4<f32>(brightened, color.a * vertex_opacity * effects.opacity);
+}
+
+fn sample_effect_texture(uv: vec2<f32>) -> vec4<f32> {
+    let radius = effects.blur_radius_px;
+    if (radius <= 0.001) {
+        return textureSample(layer_texture, layer_sampler, uv);
+    }
+    let step = vec2<f32>(effects.texel_width, effects.texel_height) * radius;
+    let center = textureSample(layer_texture, layer_sampler, uv) * 0.40;
+    let horizontal = (
+        textureSample(layer_texture, layer_sampler, uv + vec2<f32>(step.x, 0.0)) +
+        textureSample(layer_texture, layer_sampler, uv - vec2<f32>(step.x, 0.0))
+    ) * 0.15;
+    let vertical = (
+        textureSample(layer_texture, layer_sampler, uv + vec2<f32>(0.0, step.y)) +
+        textureSample(layer_texture, layer_sampler, uv - vec2<f32>(0.0, step.y))
+    ) * 0.15;
+    return center + horizontal + vertical;
+}
 
 @fragment
 fn fs_main(in: VertexOut) -> @location(0) vec4<f32> {
-    let color = textureSample(layer_texture, layer_sampler, in.uv);
-    return vec4<f32>(color.rgb, color.a * in.opacity);
+    return adjust_effect_color(sample_effect_texture(in.uv), in.opacity);
 }
 "#;
 
@@ -1991,11 +2076,52 @@ fn vs_main(
 
 @group(0) @binding(0) var layer_texture: texture_external;
 @group(0) @binding(1) var layer_sampler: sampler;
+struct EffectUniforms {
+    brightness: f32,
+    contrast: f32,
+    saturation: f32,
+    opacity: f32,
+    blur_radius_px: f32,
+    texel_width: f32,
+    texel_height: f32,
+    active: f32,
+};
+@group(0) @binding(2) var<uniform> effects: EffectUniforms;
+
+fn adjust_effect_color(color: vec4<f32>, vertex_opacity: f32) -> vec4<f32> {
+    let gray = dot(color.rgb, vec3<f32>(0.2126, 0.7152, 0.0722));
+    let saturated = vec3<f32>(gray) + (color.rgb - vec3<f32>(gray)) * effects.saturation;
+    let contrasted = (saturated - vec3<f32>(0.5)) * effects.contrast + vec3<f32>(0.5);
+    let brightened = clamp(contrasted + vec3<f32>(effects.brightness), vec3<f32>(0.0), vec3<f32>(1.0));
+    return vec4<f32>(brightened, color.a * vertex_opacity * effects.opacity);
+}
+
+fn sample_effect_texture(uv: vec2<f32>) -> vec4<f32> {
+    let radius = effects.blur_radius_px;
+    if (radius <= 0.001) {
+        return textureSampleBaseClampToEdge(layer_texture, layer_sampler, uv);
+    }
+    let step = vec2<f32>(effects.texel_width, effects.texel_height) * radius;
+    let center = textureSampleBaseClampToEdge(layer_texture, layer_sampler, uv) * 0.40;
+    let horizontal = (
+        textureSampleBaseClampToEdge(layer_texture, layer_sampler, uv + vec2<f32>(step.x, 0.0)) +
+        textureSampleBaseClampToEdge(layer_texture, layer_sampler, uv - vec2<f32>(step.x, 0.0))
+    ) * 0.15;
+    let vertical = (
+        textureSampleBaseClampToEdge(layer_texture, layer_sampler, uv + vec2<f32>(0.0, step.y)) +
+        textureSampleBaseClampToEdge(layer_texture, layer_sampler, uv - vec2<f32>(0.0, step.y))
+    ) * 0.15;
+    return center + horizontal + vertical;
+}
 
 @fragment
 fn fs_main(in: VertexOut) -> @location(0) vec4<f32> {
-    let color = textureSampleBaseClampToEdge(layer_texture, layer_sampler, in.uv);
-    return vec4<f32>(color.rgb, color.a * in.opacity);
+    let color = if (effects.blur_radius_px <= 0.001) {
+        textureSampleBaseClampToEdge(layer_texture, layer_sampler, in.uv)
+    } else {
+        sample_effect_texture(in.uv)
+    };
+    return adjust_effect_color(color, in.opacity);
 }
 "#;
 

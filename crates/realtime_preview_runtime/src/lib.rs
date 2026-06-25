@@ -3,6 +3,7 @@
 pub mod capabilities;
 pub mod clock;
 pub mod diagnostics;
+pub mod effects;
 pub mod fallback;
 pub mod frame_provider;
 pub mod gpu;

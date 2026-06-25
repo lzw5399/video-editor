@@ -286,6 +286,8 @@ pub struct RenderVisualDiagnostic {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct RenderFilterIntent {
     pub node_id: RenderGraphNodeId,
+    pub order_index: u32,
+    pub enabled: bool,
     pub name: String,
     pub kind: FilterKind,
     pub capability: RenderEffectCapability,
@@ -1054,6 +1056,8 @@ fn render_filter_intents(
                     &segment.material.material_id,
                     filter_index,
                 ),
+                order_index: filter_index.min(u32::MAX as usize) as u32,
+                enabled: filter.enabled,
                 name: filter.display_name(),
                 kind: filter.kind.clone(),
                 support: capability.export,

@@ -339,17 +339,37 @@ fn classify_filters_and_transitions(
 ) {
     for filter in &layer.filters {
         let fallback_used = filter.capability.preview != RenderIntentSupport::Supported;
-        diagnostics.push(RealtimePreviewDiagnostic::new(
-            Some(layer.segment_id.as_str().to_owned()),
-            RealtimePreviewDiagnosticDomain::Effect,
-            support_from_render_intent(
-                filter.capability.preview,
-                &filter.capability.preview_reason,
-            ),
-            filter.capability.preview_reason.clone(),
-            None,
-            fallback_used,
-        ));
+        if fallback_used {
+            diagnostics.push(RealtimePreviewDiagnostic::new(
+                Some(layer.segment_id.as_str().to_owned()),
+                RealtimePreviewDiagnosticDomain::Effect,
+                support_from_render_intent(
+                    filter.capability.preview,
+                    &filter.capability.preview_reason,
+                ),
+                filter.capability.preview_reason.clone(),
+                None,
+                true,
+            ));
+        } else if filter.enabled {
+            diagnostics.push(supported_production_effect_diagnostic(
+                Some(layer.segment_id.as_str().to_owned()),
+                RealtimePreviewDiagnosticDomain::Effect,
+                format!(
+                    "{} effect capability is registry-backed and applied by the WGPU render pass",
+                    filter.capability.capability_id
+                ),
+            ));
+        } else {
+            diagnostics.push(supported_production_effect_diagnostic(
+                Some(layer.segment_id.as_str().to_owned()),
+                RealtimePreviewDiagnosticDomain::Effect,
+                format!(
+                    "{} effect capability is registry-backed and disabled in the render graph intent",
+                    filter.capability.capability_id
+                ),
+            ));
+        }
     }
     if let Some(transition) = &layer.transition {
         let fallback_used = transition.capability.preview != RenderIntentSupport::Supported;
