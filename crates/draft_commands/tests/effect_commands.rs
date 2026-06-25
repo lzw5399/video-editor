@@ -119,8 +119,12 @@ fn effect_commands_update_enable_disable_remove_and_undo_redo_once_per_commit() 
     assert!(!disabled.draft.tracks[0].segments[0].filters[0].enabled);
     assert_eq!(disabled.command_state.undo_stack.len(), 3);
 
-    let undone = undo_timeline_edit(&disabled.draft, &disabled.command_state, &disabled.selection)
-        .expect("effect enable update should be undoable");
+    let undone = undo_timeline_edit(
+        &disabled.draft,
+        &disabled.command_state,
+        &disabled.selection,
+    )
+    .expect("effect enable update should be undoable");
     assert!(undone.draft.tracks[0].segments[0].filters[0].enabled);
     let redone = redo_timeline_edit(&undone.draft, &undone.command_state, &undone.selection)
         .expect("effect enable update should be redoable");
@@ -159,14 +163,9 @@ fn effect_commands_invalid_parameters_reject_atomically() {
         ),
         ("opacity overflow", Filter::opacity_adjustment(1_001)),
     ] {
-        let error = apply_segment_effect(
-            &draft,
-            &state,
-            &selection,
-            "video-segment".into(),
-            effect,
-        )
-        .expect_err(label);
+        let error =
+            apply_segment_effect(&draft, &state, &selection, "video-segment".into(), effect)
+                .expect_err(label);
         assert!(
             matches!(
                 error.kind,
@@ -176,7 +175,11 @@ fn effect_commands_invalid_parameters_reject_atomically() {
         );
         assert_eq!(draft, draft_with_video_segment(), "{label} mutated draft");
         assert_eq!(state, CommandState::empty(), "{label} mutated state");
-        assert_eq!(selection, selected_segment_context(), "{label} mutated selection");
+        assert_eq!(
+            selection,
+            selected_segment_context(),
+            "{label} mutated selection"
+        );
     }
 }
 

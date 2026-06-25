@@ -67,6 +67,21 @@ pub enum TimelineCommandErrorKind {
         segment_id: SegmentId,
         reason: String,
     },
+    InvalidEffectParameter {
+        segment_id: SegmentId,
+        capability_id: String,
+        parameter: String,
+        reason: String,
+    },
+    UnsupportedEffect {
+        segment_id: SegmentId,
+        capability_id: String,
+        reason: String,
+    },
+    EffectNotFound {
+        segment_id: SegmentId,
+        effect_index: u32,
+    },
     InvalidTransitionRelationship {
         track_id: TrackId,
         from_segment_id: SegmentId,
@@ -173,6 +188,35 @@ impl fmt::Display for TimelineCommandError {
                 "invalid retime for segment {}: {}",
                 segment_id.as_str(),
                 reason
+            ),
+            TimelineCommandErrorKind::InvalidEffectParameter {
+                segment_id,
+                capability_id,
+                parameter,
+                reason,
+            } => write!(
+                formatter,
+                "invalid effect parameter {parameter} for {capability_id} on segment {}: {}",
+                segment_id.as_str(),
+                reason
+            ),
+            TimelineCommandErrorKind::UnsupportedEffect {
+                segment_id,
+                capability_id,
+                reason,
+            } => write!(
+                formatter,
+                "unsupported effect {capability_id} for segment {}: {}",
+                segment_id.as_str(),
+                reason
+            ),
+            TimelineCommandErrorKind::EffectNotFound {
+                segment_id,
+                effect_index,
+            } => write!(
+                formatter,
+                "effect index {effect_index} not found on segment {}",
+                segment_id.as_str()
             ),
             TimelineCommandErrorKind::InvalidTransitionRelationship {
                 track_id,

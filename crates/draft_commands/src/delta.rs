@@ -93,6 +93,27 @@ const VISUAL_CONSUMERS: &[DirtyDomain] = &[
     DirtyDomain::PreviewCache,
 ];
 
+const EFFECT_DOMAINS: &[DirtyDomain] = &[
+    DirtyDomain::Effect,
+    DirtyDomain::Filter,
+    DirtyDomain::Visual,
+    DirtyDomain::Preview,
+    DirtyDomain::ExportPrep,
+    DirtyDomain::Thumbnail,
+    DirtyDomain::Proxy,
+    DirtyDomain::GraphSnapshot,
+    DirtyDomain::PreviewCache,
+];
+
+const EFFECT_CONSUMERS: &[DirtyDomain] = &[
+    DirtyDomain::Preview,
+    DirtyDomain::ExportPrep,
+    DirtyDomain::Thumbnail,
+    DirtyDomain::Proxy,
+    DirtyDomain::GraphSnapshot,
+    DirtyDomain::PreviewCache,
+];
+
 const RETIME_DOMAINS: &[DirtyDomain] = &[
     DirtyDomain::Timing,
     DirtyDomain::Audio,
@@ -528,6 +549,25 @@ pub fn visual_segment_delta(
         InvalidationScope::targeted(
             segment_material_ids(&segment.material_id),
             VISUAL_CONSUMERS.to_vec(),
+        ),
+        reason,
+    )
+}
+
+pub fn effect_segment_delta(
+    command: CommandDeltaName,
+    track_id: &TrackId,
+    segment: &Segment,
+    reason: &'static str,
+) -> CommandDelta {
+    CommandDelta::targeted(
+        command,
+        segment_entities(track_id, &segment.segment_id, &segment.material_id),
+        EFFECT_DOMAINS.to_vec(),
+        vec![current_range(segment.target_timerange.clone())],
+        InvalidationScope::targeted(
+            segment_material_ids(&segment.material_id),
+            EFFECT_CONSUMERS.to_vec(),
         ),
         reason,
     )

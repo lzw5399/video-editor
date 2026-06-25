@@ -15,6 +15,7 @@ use crate::{
         current_range, moved_segment_delta, previous_range, segment_delta,
         segment_with_canvas_delta, split_segment_delta, track_delta, track_visibility_delta,
     },
+    effects::{apply_segment_effect, remove_segment_effect, update_segment_effect_parameter},
     history::{push_undo_snapshot, redo_timeline_edit, undo_timeline_edit},
     keyframe::{remove_segment_keyframe, set_segment_keyframe},
     retiming::{
@@ -362,6 +363,30 @@ pub fn execute_timeline_edit(
             &payload.selection,
             payload.segment_id,
             payload.visual,
+        ),
+        TimelineEditPayload::ApplySegmentEffect(payload) => apply_segment_effect(
+            &payload.draft,
+            &payload.command_state,
+            &payload.selection,
+            payload.segment_id,
+            payload.effect,
+        ),
+        TimelineEditPayload::UpdateSegmentEffectParameter(payload) => {
+            update_segment_effect_parameter(
+                &payload.draft,
+                &payload.command_state,
+                &payload.selection,
+                payload.segment_id,
+                payload.effect_index,
+                payload.parameter,
+            )
+        }
+        TimelineEditPayload::RemoveSegmentEffect(payload) => remove_segment_effect(
+            &payload.draft,
+            &payload.command_state,
+            &payload.selection,
+            payload.segment_id,
+            payload.effect_index,
         ),
         TimelineEditPayload::SetSegmentRetime(payload) => set_segment_retime(
             &payload.draft,

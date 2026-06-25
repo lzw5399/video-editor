@@ -426,6 +426,21 @@ impl Filter {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(
+    tag = "parameter",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+pub enum EffectParameterUpdate {
+    Enabled { enabled: bool },
+    GaussianBlurRadiusMillis { radius_millis: u32 },
+    BasicColorBrightnessMillis { brightness_millis: i32 },
+    BasicColorContrastMillis { contrast_millis: u32 },
+    BasicColorSaturationMillis { saturation_millis: u32 },
+    OpacityMillis { opacity_millis: u32 },
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 pub enum TransitionKind {

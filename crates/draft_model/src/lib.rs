@@ -34,9 +34,10 @@ pub use delta::{
 pub use draft::{Draft, DraftMetadata, DraftSchemaVersion};
 pub use effects::{
     AudioRetimePolicy, BlendModeKind, CapabilityCategory, CapabilityReportItem, CapabilitySupport,
-    CapabilitySurface, EffectCapabilityRegistry, EffectKind, ExternalEffectReference, Filter,
-    FilterKind, MaskKind, ProductionEffectCapabilityRegistry, RetimeMode, SegmentRetiming,
-    SpeedCurvePoint, SpeedRatio, TrackTransition, Transition, TransitionKind, TransitionReference,
+    CapabilitySurface, EffectCapabilityRegistry, EffectKind, EffectParameterUpdate,
+    ExternalEffectReference, Filter, FilterKind, MaskKind, ProductionEffectCapabilityRegistry,
+    RetimeMode, SegmentRetiming, SpeedCurvePoint, SpeedRatio, TrackTransition, Transition,
+    TransitionKind, TransitionReference,
 };
 pub use font_registry::{
     BUNDLED_SERIF_TEXT_FONT_FAMILY, BUNDLED_SERIF_TEXT_FONT_LICENSE_PATH,
@@ -181,6 +182,9 @@ pub enum TimelineEditPayload {
     SetTrackMute(SetTrackMuteCommandPayload),
     UpdateDraftCanvasConfig(UpdateDraftCanvasConfigCommandPayload),
     UpdateSegmentVisual(UpdateSegmentVisualCommandPayload),
+    ApplySegmentEffect(ApplySegmentEffectCommandPayload),
+    UpdateSegmentEffectParameter(UpdateSegmentEffectParameterCommandPayload),
+    RemoveSegmentEffect(RemoveSegmentEffectCommandPayload),
     SetSegmentRetime(SetSegmentRetimeCommandPayload),
     ClearSegmentRetime(ClearSegmentRetimeCommandPayload),
     AddTransition(AddTransitionCommandPayload),
@@ -660,6 +664,40 @@ pub struct UpdateSegmentVisualCommandPayload {
     pub selection: TimelineSelection,
     pub segment_id: SegmentId,
     pub visual: SegmentVisual,
+}
+
+/// Payload accepted by the Phase 19 segment effect apply command.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ApplySegmentEffectCommandPayload {
+    pub draft: Draft,
+    pub command_state: CommandState,
+    pub selection: TimelineSelection,
+    pub segment_id: SegmentId,
+    pub effect: Filter,
+}
+
+/// Payload accepted by the Phase 19 segment effect parameter update command.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct UpdateSegmentEffectParameterCommandPayload {
+    pub draft: Draft,
+    pub command_state: CommandState,
+    pub selection: TimelineSelection,
+    pub segment_id: SegmentId,
+    pub effect_index: u32,
+    pub parameter: EffectParameterUpdate,
+}
+
+/// Payload accepted by the Phase 19 segment effect remove command.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RemoveSegmentEffectCommandPayload {
+    pub draft: Draft,
+    pub command_state: CommandState,
+    pub selection: TimelineSelection,
+    pub segment_id: SegmentId,
+    pub effect_index: u32,
 }
 
 /// Payload accepted by the Phase 19 segment retiming command.

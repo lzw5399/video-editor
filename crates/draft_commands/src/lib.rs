@@ -8,6 +8,7 @@
 pub mod audio;
 pub mod canvas;
 pub mod delta;
+pub mod effects;
 pub mod error;
 pub mod history;
 pub mod keyframe;
