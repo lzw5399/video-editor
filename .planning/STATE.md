@@ -5,16 +5,16 @@ milestone_name: milestone
 current_phase: 19
 current_phase_name: production-effects-retiming-and-transition-semantics
 status: executing
-stopped_at: Completed 19-02-PLAN.md
-last_updated: "2026-06-25T07:49:30.830Z"
+stopped_at: Completed 19-03-PLAN.md
+last_updated: "2026-06-25T08:24:18.651Z"
 last_activity: 2026-06-25
 last_activity_desc: Phase 19 execution started
 progress:
   total_phases: 25
   completed_phases: 24
   total_plans: 187
-  completed_plans: 174
-  percent: 93
+  completed_plans: 175
+  percent: 94
 ---
 
 # Project State
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 ## Current Position
 
 Phase: 19 (production-effects-retiming-and-transition-semantics) — EXECUTING
-Plan: 3 of 15
+Plan: 4 of 15
 Status: Ready to execute
 Last activity: 2026-06-25 — Phase 19 execution started
 
@@ -212,6 +212,7 @@ Progress: Phase 15.1, 15.2, 15.3, 16, 17, 17.1, and 18 are complete; Phase 19 is
 | Phase 18 P06 | 17 min | 3 tasks | 4 files |
 | Phase 19 P01 | 12 min | 3 tasks | 14 files |
 | Phase 19 P02 | 26 min | 3 tasks | 22 files |
+| Phase 19 P03 | 27 min | 3 tasks | 16 files |
 
 ## Accumulated Context
 
@@ -611,6 +612,9 @@ Recent decisions affecting current work:
 - [Phase 19]: [Phase 19 Plan 02]: External provider IDs remain report-only compatibility references and cannot become first-party supported capability kinds.
 - [Phase 19]: [Phase 19 Plan 02]: Render graph carries typed preview/export support facts so realtime preview and compiler layers consume registry decisions instead of string inference.
 - [Phase 19]: [Phase 19 Plan 02]: Desktop TypeScript effect contracts are generated from Rust schema exports; renderer code does not hand-author semantic unions.
+- [Phase 19]: [Phase 19 Plan 03]: Retime edit payloads remain Rust-internal TimelineEditPayload variants while public CommandEnvelope contracts continue to exclude timeline edit commands.
+- [Phase 19]: [Phase 19 Plan 03]: engine_core owns retimed source-time mapping through SegmentTimeMap and source_position_for_retime so preview, render, export, and UI consumers do not recalculate timeline math.
+- [Phase 19]: [Phase 19 Plan 03]: Unsupported pitch/time-stretch retime combinations surface as typed audio diagnostics instead of silent success.
 
 ### Pending Todos
 
@@ -692,6 +696,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-06-25T07:49:30.822Z
-Stopped at: Completed 19-02-PLAN.md
+Last session: 2026-06-25T08:24:18.644Z
+Stopped at: Completed 19-03-PLAN.md
 Resume file: None
