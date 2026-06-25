@@ -4,7 +4,7 @@ use std::fmt;
 
 use draft_model::{
     AudioEffectSlotKind, Draft, DraftMetadata, DraftSchemaVersion, DraftValidationError, Filter,
-    Segment, TextBubbleRef, TextEffectRef, TextSegment, Track, validate_draft,
+    FilterKind, Segment, TextBubbleRef, TextEffectRef, TextSegment, Track, validate_draft,
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -194,10 +194,21 @@ fn validate_filter_semantics(
     field: &str,
     filter: &Filter,
 ) -> Result<(), DraftImportPlanValidationError> {
-    reject_provider_semantic_text(&format!("{field}.name"), &filter.name)?;
-    for (key, value) in &filter.parameters {
-        reject_provider_semantic_text(&format!("{field}.parameters.{key}"), key)?;
-        reject_provider_semantic_text(&format!("{field}.parameters.{key}"), value)?;
+    if let FilterKind::ExternalReference { reference } = &filter.kind {
+        reject_provider_semantic_text(
+            &format!("{field}.kind.reference.provider"),
+            &reference.provider,
+        )?;
+        reject_provider_semantic_text(
+            &format!("{field}.kind.reference.effectId"),
+            &reference.effect_id,
+        )?;
+        if let Some(display_name) = &reference.display_name {
+            reject_provider_semantic_text(
+                &format!("{field}.kind.reference.displayName"),
+                display_name,
+            )?;
+        }
     }
     Ok(())
 }
