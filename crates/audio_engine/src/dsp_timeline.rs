@@ -2,12 +2,17 @@ use std::error::Error;
 use std::fmt;
 
 use draft_model::{
-    AudioEffectSlotKind, KeyframeProperty, KeyframeValue, MaterialId, Microseconds as TimelineTime,
-    Segment, SegmentId, SourceTimerange, TargetTimerange, TrackId, TrackKind,
+    AudioEffectSlotKind, AudioRetimePolicy, KeyframeProperty, KeyframeValue, MaterialId,
+    Microseconds as TimelineTime, RetimeMode, Segment, SegmentId, SourceTimerange, TargetTimerange,
+    TrackId, TrackKind,
 };
+use engine_core::{audio_retime_diagnostic, retimed_source_range, source_position_for_retime};
 use serde::{Deserialize, Serialize};
 
-use crate::mix_intent::{AudioMixClassification, AudioMixIntent, AudioMixSegment};
+use crate::mix_intent::{
+    AudioMixClassification, AudioMixIntent, AudioMixSegment, AudioRetimeMixIntent,
+    AudioRetimeMixSupport, AudioRetimeSamplePoint, AudioRetimeSourceSampleMap,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -49,6 +54,7 @@ pub struct DspSegment {
     pub source_start_sample: u64,
     pub target_start_sample: u64,
     pub target_duration_samples: u64,
+    pub retime: AudioRetimeMixIntent,
     pub gain_envelope: DspGainEnvelope,
     pub pan_envelope: DspPanEnvelope,
     pub fade_envelope: DspFadeEnvelope,
@@ -67,6 +73,7 @@ impl DspSegment {
             source_start_sample: self.source_start_sample,
             target_start_sample: self.target_start_sample,
             target_duration_samples: self.target_duration_samples,
+            retime: self.retime.clone(),
             gain_envelope: self.gain_envelope.clone(),
             pan_envelope: self.pan_envelope.clone(),
             fade_envelope: self.fade_envelope.clone(),
@@ -88,6 +95,7 @@ pub struct DspGainEnvelope {
 pub struct DspGainPoint {
     pub at: TimelineTime,
     pub target_sample: u64,
+    pub source_sample: u64,
     pub gain_millis: u32,
 }
 
@@ -144,16 +152,27 @@ impl From<DspMixClassification> for AudioMixClassification {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct DspEvaluationDiagnostic {
+    pub kind: DspEvaluationDiagnosticKind,
     pub track_id: TrackId,
     pub segment_id: SegmentId,
     pub target_time: TimelineTime,
     pub reason: String,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum DspEvaluationDiagnosticKind {
+    UnsupportedAudioEffectSlot,
+    UnsupportedPitchPreservation,
+    DegradedSpeedCurveFollowSpeed,
+    MutedUnsupportedRetime,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DspTimelineError {
     InvalidSampleRate,
     SampleIndexOverflow,
+    RetimeMappingFailed(String),
 }
 
 impl fmt::Display for DspTimelineError {
@@ -161,6 +180,9 @@ impl fmt::Display for DspTimelineError {
         match self {
             Self::InvalidSampleRate => write!(formatter, "audio sample rate must be nonzero"),
             Self::SampleIndexOverflow => write!(formatter, "audio sample index overflowed"),
+            Self::RetimeMappingFailed(reason) => {
+                write!(formatter, "audio retime mapping failed: {reason}")
+            }
         }
     }
 }
@@ -242,6 +264,7 @@ fn evaluate_segment(
         timeline_time_to_samples(segment.target_timerange.start, sample_rate_hz)?;
     let target_duration_samples =
         timeline_time_to_samples(segment.target_timerange.duration, sample_rate_hz)?;
+    let retime = retime_mix_intent(track_id, segment, sample_rate_hz, diagnostics)?;
     let gain_envelope = gain_envelope(segment, sample_rate_hz)?;
     let effect_slots = effect_slots(segment, track_id, diagnostics);
     let mix_classification = if track_muted {
@@ -261,6 +284,7 @@ fn evaluate_segment(
         source_start_sample,
         target_start_sample,
         target_duration_samples,
+        retime,
         gain_envelope,
         pan_envelope: DspPanEnvelope {
             balance_millis: segment.audio.pan_balance_millis.balance_millis,
@@ -303,9 +327,16 @@ fn gain_envelope(
                 .map(TimelineTime::new)
                 .ok_or(DspTimelineError::SampleIndexOverflow)
                 .and_then(|target_time| {
+                    let source_time = source_position_for_retime(
+                        &segment.source_timerange,
+                        at,
+                        &segment.retiming,
+                    )
+                    .map_err(|error| DspTimelineError::RetimeMappingFailed(error.to_string()))?;
                     Ok(DspGainPoint {
                         at: target_time,
                         target_sample: timeline_time_to_samples(target_time, sample_rate_hz)?,
+                        source_sample: timeline_time_to_samples(source_time, sample_rate_hz)?,
                         gain_millis,
                     })
                 })
@@ -320,6 +351,172 @@ fn gain_envelope(
     })
 }
 
+fn retime_mix_intent(
+    track_id: &TrackId,
+    segment: &Segment,
+    sample_rate_hz: u32,
+    diagnostics: &mut Vec<DspEvaluationDiagnostic>,
+) -> Result<AudioRetimeMixIntent, DspTimelineError> {
+    let source_sample_map = retime_source_sample_map(segment, sample_rate_hz)?;
+    let (follow_speed, support, reason) = retime_audio_support(track_id, segment, diagnostics);
+
+    Ok(AudioRetimeMixIntent {
+        retiming: segment.retiming.clone(),
+        source_sample_map,
+        policy: segment.retiming.audio_policy,
+        follow_speed,
+        support,
+        reason,
+    })
+}
+
+fn retime_source_sample_map(
+    segment: &Segment,
+    sample_rate_hz: u32,
+) -> Result<AudioRetimeSourceSampleMap, DspTimelineError> {
+    let retimed_source_timerange = retimed_source_range(
+        &segment.source_timerange,
+        segment.target_timerange.duration,
+        &segment.retiming,
+    )
+    .map_err(|error| DspTimelineError::RetimeMappingFailed(error.to_string()))?;
+    let points = retime_sample_points(segment, sample_rate_hz)?;
+
+    Ok(AudioRetimeSourceSampleMap {
+        source_timerange: segment.source_timerange.clone(),
+        retimed_source_timerange: retimed_source_timerange.clone(),
+        target_timerange: segment.target_timerange.clone(),
+        source_start_sample: timeline_time_to_samples(
+            segment.source_timerange.start,
+            sample_rate_hz,
+        )?,
+        retimed_source_start_sample: timeline_time_to_samples(
+            retimed_source_timerange.start,
+            sample_rate_hz,
+        )?,
+        retimed_source_duration_samples: timeline_time_to_samples(
+            retimed_source_timerange.duration,
+            sample_rate_hz,
+        )?,
+        target_start_sample: timeline_time_to_samples(
+            segment.target_timerange.start,
+            sample_rate_hz,
+        )?,
+        target_duration_samples: timeline_time_to_samples(
+            segment.target_timerange.duration,
+            sample_rate_hz,
+        )?,
+        points,
+    })
+}
+
+fn retime_sample_points(
+    segment: &Segment,
+    sample_rate_hz: u32,
+) -> Result<Vec<AudioRetimeSamplePoint>, DspTimelineError> {
+    let mut offsets = vec![
+        TimelineTime::ZERO,
+        TimelineTime::new(segment.target_timerange.duration.get() / 2),
+        segment.target_timerange.duration,
+    ];
+    offsets.extend(
+        segment
+            .keyframes
+            .iter()
+            .filter(|keyframe| keyframe.at.get() <= segment.target_timerange.duration.get())
+            .map(|keyframe| keyframe.at),
+    );
+    if let RetimeMode::SpeedCurve { points } = &segment.retiming.mode {
+        offsets.extend(
+            points
+                .iter()
+                .filter(|point| point.target_time.get() <= segment.target_timerange.duration.get())
+                .map(|point| point.target_time),
+        );
+    }
+    offsets.sort();
+    offsets.dedup();
+
+    offsets
+        .into_iter()
+        .map(|target_offset| {
+            let target_time = add_timeline_time(segment.target_timerange.start, target_offset)?;
+            let source_time = source_position_for_retime(
+                &segment.source_timerange,
+                target_offset,
+                &segment.retiming,
+            )
+            .map_err(|error| DspTimelineError::RetimeMappingFailed(error.to_string()))?;
+            Ok(AudioRetimeSamplePoint {
+                target_offset,
+                target_time,
+                target_sample: timeline_time_to_samples(target_time, sample_rate_hz)?,
+                source_time,
+                source_sample: timeline_time_to_samples(source_time, sample_rate_hz)?,
+            })
+        })
+        .collect()
+}
+
+fn retime_audio_support(
+    track_id: &TrackId,
+    segment: &Segment,
+    diagnostics: &mut Vec<DspEvaluationDiagnostic>,
+) -> (bool, AudioRetimeMixSupport, String) {
+    if let Some(diagnostic) = audio_retime_diagnostic(&segment.retiming) {
+        diagnostics.push(DspEvaluationDiagnostic {
+            kind: DspEvaluationDiagnosticKind::UnsupportedPitchPreservation,
+            track_id: track_id.clone(),
+            segment_id: segment.segment_id.clone(),
+            target_time: segment.target_timerange.start,
+            reason: diagnostic.message.clone(),
+        });
+        return (
+            false,
+            AudioRetimeMixSupport::Unsupported,
+            diagnostic.message,
+        );
+    }
+
+    match segment.retiming.audio_policy {
+        AudioRetimePolicy::FollowVideoSpeed => match &segment.retiming.mode {
+            RetimeMode::Constant { .. } => (
+                true,
+                AudioRetimeMixSupport::Supported,
+                "constant-speed audio follow-speed is represented in DSP mix intent".to_owned(),
+            ),
+            RetimeMode::SpeedCurve { .. } => {
+                let reason = "speed curve audio follow-speed is typed in DSP but sample-accurate time-stretch output remains degraded".to_owned();
+                diagnostics.push(DspEvaluationDiagnostic {
+                    kind: DspEvaluationDiagnosticKind::DegradedSpeedCurveFollowSpeed,
+                    track_id: track_id.clone(),
+                    segment_id: segment.segment_id.clone(),
+                    target_time: segment.target_timerange.start,
+                    reason: reason.clone(),
+                });
+                (true, AudioRetimeMixSupport::Degraded, reason)
+            }
+        },
+        AudioRetimePolicy::PreservePitch => (
+            false,
+            AudioRetimeMixSupport::Supported,
+            "preserve-pitch audio retime is a no-op at 1x speed".to_owned(),
+        ),
+        AudioRetimePolicy::MuteUnsupported => {
+            let reason =
+                "audio will mute when retime follow-speed support is unavailable".to_owned();
+            diagnostics.push(DspEvaluationDiagnostic {
+                kind: DspEvaluationDiagnosticKind::MutedUnsupportedRetime,
+                track_id: track_id.clone(),
+                segment_id: segment.segment_id.clone(),
+                target_time: segment.target_timerange.start,
+                reason: reason.clone(),
+            });
+            (false, AudioRetimeMixSupport::Degraded, reason)
+        }
+    }
+}
+
 fn effect_slots(
     segment: &Segment,
     track_id: &TrackId,
@@ -332,6 +529,7 @@ fn effect_slots(
         .map(|slot| match &slot.kind {
             AudioEffectSlotKind::Unsupported { name, external_ref } => {
                 diagnostics.push(DspEvaluationDiagnostic {
+                    kind: DspEvaluationDiagnosticKind::UnsupportedAudioEffectSlot,
                     track_id: track_id.clone(),
                     segment_id: segment.segment_id.clone(),
                     target_time: segment.target_timerange.start,
@@ -347,6 +545,17 @@ fn effect_slots(
             }
         })
         .collect()
+}
+
+fn add_timeline_time(
+    start: TimelineTime,
+    offset: TimelineTime,
+) -> Result<TimelineTime, DspTimelineError> {
+    start
+        .get()
+        .checked_add(offset.get())
+        .map(TimelineTime::new)
+        .ok_or(DspTimelineError::SampleIndexOverflow)
 }
 
 fn timeline_time_to_samples(

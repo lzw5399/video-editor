@@ -156,7 +156,7 @@ fn volume_keyframe(at: u64, value: u32) -> Keyframe {
 }
 
 #[test]
-fn phase19_audio_dsp_constant_speed_maps_source_samples_and_mix_intent() {
+fn phase19_audio_dsp_timeline_constant_speed_maps_source_samples_and_mix_intent() {
     let retiming = SegmentRetiming {
         mode: RetimeMode::Constant {
             speed: SpeedRatio::new(2, 1),
@@ -170,10 +170,7 @@ fn phase19_audio_dsp_constant_speed_maps_source_samples_and_mix_intent() {
     let segment = &plan.tracks[0].segments[0];
     assert_eq!(segment.retime.retiming, retiming);
     assert_eq!(segment.target_duration_samples, 72_000);
-    assert_eq!(
-        segment.retime.source_sample_map.source_start_sample,
-        24_000
-    );
+    assert_eq!(segment.retime.source_sample_map.source_start_sample, 24_000);
     assert_eq!(
         segment
             .retime
@@ -182,8 +179,7 @@ fn phase19_audio_dsp_constant_speed_maps_source_samples_and_mix_intent() {
         144_000
     );
     assert_eq!(
-        segment.retime.source_sample_map.points[1].source_sample,
-        96_000,
+        segment.retime.source_sample_map.points[1].source_sample, 96_000,
         "750ms target offset at 2x must map to 1.5s source offset"
     );
     assert_eq!(segment.gain_envelope.points[1].source_sample, 96_000);
@@ -193,7 +189,7 @@ fn phase19_audio_dsp_constant_speed_maps_source_samples_and_mix_intent() {
 }
 
 #[test]
-fn phase19_audio_dsp_speed_curve_maps_source_samples_without_floats() {
+fn phase19_audio_dsp_timeline_speed_curve_maps_source_samples_without_floats() {
     let retiming = SegmentRetiming {
         mode: RetimeMode::SpeedCurve {
             points: vec![
@@ -213,7 +209,8 @@ fn phase19_audio_dsp_speed_curve_maps_source_samples_without_floats() {
         },
         audio_policy: AudioRetimePolicy::FollowVideoSpeed,
     };
-    let draft = retimed_audio_draft(retiming);
+    let mut draft = retimed_audio_draft(retiming);
+    draft.tracks[0].segments[0].target_timerange.duration = Microseconds::new(2_500_000);
 
     let plan = evaluate_dsp_timeline(&draft, DspTimelineConfig::new(48_000)).unwrap();
 
@@ -227,24 +224,24 @@ fn phase19_audio_dsp_speed_curve_maps_source_samples_without_floats() {
         "2.5s target maps to 3.25s source under the integer speed curve"
     );
     assert_eq!(
-        segment.retime.source_sample_map.points[1].source_sample,
-        96_000,
-        "1.5s target maps to 2.0s source under the curve"
+        segment
+            .retime
+            .source_sample_map
+            .source_sample_at_target(Microseconds::new(1_500_000)),
+        Some(120_000),
+        "1.5s target maps to absolute 2.5s source time under the curve"
     );
-    assert_eq!(segment.gain_envelope.points[1].source_sample, 96_000);
+    assert_eq!(segment.gain_envelope.points[2].source_sample, 120_000);
     assert!(segment.retime.follow_speed);
     assert_eq!(segment.retime.support, AudioRetimeMixSupport::Degraded);
     assert!(
-        segment
-            .retime
-            .reason
-            .contains("speed curve"),
+        segment.retime.reason.contains("speed curve"),
         "speed-curve follow-speed should carry explicit degradation reason"
     );
 }
 
 #[test]
-fn phase19_audio_dsp_preserve_pitch_emits_typed_diagnostics() {
+fn phase19_audio_dsp_timeline_preserve_pitch_emits_typed_diagnostics() {
     let retiming = SegmentRetiming {
         mode: RetimeMode::Constant {
             speed: SpeedRatio::new(2, 1),

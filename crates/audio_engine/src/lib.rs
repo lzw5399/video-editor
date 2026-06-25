@@ -7,11 +7,15 @@ pub mod session;
 pub mod telemetry;
 
 pub use dsp_timeline::{
-    DspEffectSlotClassification, DspEffectSlotSupport, DspEvaluationDiagnostic, DspFadeEnvelope,
-    DspGainEnvelope, DspGainPoint, DspMixClassification, DspPanEnvelope, DspSegment,
-    DspTimelineConfig, DspTimelineError, DspTimelinePlan, DspTrack, evaluate_dsp_timeline,
+    DspEffectSlotClassification, DspEffectSlotSupport, DspEvaluationDiagnostic,
+    DspEvaluationDiagnosticKind, DspFadeEnvelope, DspGainEnvelope, DspGainPoint,
+    DspMixClassification, DspPanEnvelope, DspSegment, DspTimelineConfig, DspTimelineError,
+    DspTimelinePlan, DspTrack, evaluate_dsp_timeline,
 };
-pub use mix_intent::{AudioMixClassification, AudioMixIntent, AudioMixSegment, AudioMixSummary};
+pub use mix_intent::{
+    AudioMixClassification, AudioMixIntent, AudioMixSegment, AudioMixSummary, AudioRetimeMixIntent,
+    AudioRetimeMixSupport, AudioRetimeSamplePoint, AudioRetimeSourceSampleMap,
+};
 pub use output::AudioOutputSink as AudioOutputStream;
 pub use output::MockAudioOutputSink as MockAudioOutputStream;
 pub use output::{

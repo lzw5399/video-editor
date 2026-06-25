@@ -1,5 +1,6 @@
 use draft_model::{
-    MaterialId, Microseconds as TimelineTime, SegmentId, SourceTimerange, TargetTimerange, TrackId,
+    AudioRetimePolicy, MaterialId, Microseconds as TimelineTime, SegmentId, SegmentRetiming,
+    SourceTimerange, TargetTimerange, TrackId,
 };
 use serde::{Deserialize, Serialize};
 
@@ -37,11 +38,64 @@ pub struct AudioMixSegment {
     pub source_start_sample: u64,
     pub target_start_sample: u64,
     pub target_duration_samples: u64,
+    pub retime: AudioRetimeMixIntent,
     pub gain_envelope: DspGainEnvelope,
     pub pan_envelope: DspPanEnvelope,
     pub fade_envelope: DspFadeEnvelope,
     pub effect_slots: Vec<DspEffectSlotClassification>,
     pub classification: AudioMixClassification,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct AudioRetimeMixIntent {
+    pub retiming: SegmentRetiming,
+    pub source_sample_map: AudioRetimeSourceSampleMap,
+    pub policy: AudioRetimePolicy,
+    pub follow_speed: bool,
+    pub support: AudioRetimeMixSupport,
+    pub reason: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct AudioRetimeSourceSampleMap {
+    pub source_timerange: SourceTimerange,
+    pub retimed_source_timerange: SourceTimerange,
+    pub target_timerange: TargetTimerange,
+    pub source_start_sample: u64,
+    pub retimed_source_start_sample: u64,
+    pub retimed_source_duration_samples: u64,
+    pub target_start_sample: u64,
+    pub target_duration_samples: u64,
+    pub points: Vec<AudioRetimeSamplePoint>,
+}
+
+impl AudioRetimeSourceSampleMap {
+    pub fn source_sample_at_target(&self, target_offset: TimelineTime) -> Option<u64> {
+        self.points
+            .iter()
+            .find(|point| point.target_offset == target_offset)
+            .map(|point| point.source_sample)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct AudioRetimeSamplePoint {
+    pub target_offset: TimelineTime,
+    pub target_time: TimelineTime,
+    pub target_sample: u64,
+    pub source_time: TimelineTime,
+    pub source_sample: u64,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum AudioRetimeMixSupport {
+    Supported,
+    Degraded,
+    Unsupported,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

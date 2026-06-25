@@ -125,6 +125,7 @@ name = "audio_engine"
 version = "0.1.0"
 dependencies = [
  "draft_model",
+ "engine_core",
  "realtime_preview_runtime",
  "serde",
  "task_runtime",
