@@ -428,22 +428,22 @@ expect(probe.streams.find((stream) => stream.codec_type === "audio")).toBeDefine
 | A3 | Node `24.15.0` should be acceptable even though `package.json` pins engine text to `24.12.0`. | Environment Availability | If tooling enforces exact engine equality, packaged gates may need Node normalization first. |
 | A4 | The 3000 segments/track diagnostic can be wired as non-blocking script output rather than part of the default blocking aggregate. | Validation Architecture | If CI treats all script failures as blocking, the planner must isolate diagnostic execution. |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **Exact sampled-frame implementation**
+1. **RESOLVED: Exact sampled-frame implementation**
    - What we know: D-12 requires ffprobe metadata plus sampled semantic frames near start/middle/tail/edit points. [VERIFIED: 20-CONTEXT.md]
-   - What's unclear: Whether sampling should run via bundled `ffmpeg` from Playwright or a Rust/testkit helper.
-   - Recommendation: Prefer existing bundled-runtime discovery from product tests first; move sampling into Rust/testkit only if Playwright sampling is flaky. [ASSUMED]
+   - Decision: Phase 20 export evidence uses the product runtime evidence helpers to discover bundled `ffprobe` and bundled `ffmpeg`, then runs Node-side `execFile` sampling from Playwright. A Rust/testkit helper is allowed only if the current code cannot expose a stable bundled runtime path for frame extraction; even then, product proof must still be tied to bundled runtime evidence rather than `PATH`. [RESOLVED: 20-CONTEXT.md; apps/desktop-electron/tests/helpers/realWorkflow.ts; docs/runtime-boundaries.md]
+   - Plan impact: `longTimelineEvidence.ts` owns `expectPhase20ExportMedia` with bundled metadata and sampled-frame checks; `product-long-timeline-uat.spec.ts` calls that helper for both exports. [RESOLVED]
 
-2. **Evidence bundle schema**
+2. **RESOLVED: Evidence bundle schema**
    - What we know: D-14 requires lightweight success JSON and full failure artifacts. [VERIFIED: 20-CONTEXT.md]
-   - What's unclear: Exact JSON keys and retention directory names.
-   - Recommendation: Use `test-results/phase20/<run-id>/summary.json` for success and nested `trace/`, `screenshots/`, `video/`, `telemetry/`, `project/`, `export/` folders on failure. [ASSUMED]
+   - Decision: Successful runs write `test-results/phase20/<run-id>/summary.json`. Failed runs retain nested `trace/`, `screenshots/`, `video/`, `telemetry/`, `project/`, and `export/` directories under the same run root, with the summary pointing to retained artifact paths. [RESOLVED: 20-CONTEXT.md]
+   - Plan impact: `generatePhase20LongTimelineFixture` creates the run root, `writePhase20EvidenceSummary` writes the success summary, and `collectPhase20FailureEvidence` retains the nested failure directories. [RESOLVED]
 
-3. **Node engine exactness**
+3. **RESOLVED: Node engine exactness**
    - What we know: repo `engines.node` says `24.12.0`; current local Node is `24.15.0`. [VERIFIED: package.json; environment probe]
-   - What's unclear: Whether package tooling enforces exact equality in this workspace.
-   - Recommendation: Planner should add a Wave 0 environment checkpoint or use the repo's existing package manager path before declaring packaged UAT blocked. [ASSUMED]
+   - Decision: Treat the Node exact-version mismatch as an environment smoke/checkpoint, not a Phase 20 product blocker. Executors should run the existing pnpm/build smoke first; if the package manager enforces exact equality, switch to the repo-supported Node version before continuing. Do not weaken Phase 20 product gates because of the local Node mismatch. [RESOLVED: package.json; environment probe]
+   - Plan impact: Plan 20-03 includes fast source/build smoke checks before packaged UAT commands; Plan 20-04 keeps package-manager enforcement in the aggregate instead of adding a product-scope blocker. [RESOLVED]
 
 ## Environment Availability
 
