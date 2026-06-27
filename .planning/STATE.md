@@ -5,16 +5,16 @@ milestone_name: Usability & Export
 current_phase: 20
 current_phase_name: long-timeline-product-uat-and-guard-baseline
 status: executing
-stopped_at: Completed 20-02-PLAN.md
-last_updated: "2026-06-27T18:19:01.469Z"
+stopped_at: Completed 20-04-PLAN.md
+last_updated: "2026-06-27T19:39:54.438Z"
 last_activity: 2026-06-27
-last_activity_desc: Completed 20-02-PLAN.md
+last_activity_desc: Completed 20-04-PLAN.md
 progress:
   total_phases: 5
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 4
-  completed_plans: 2
-  percent: 50
+  completed_plans: 4
+  percent: 20
 ---
 
 # Project State
@@ -24,31 +24,31 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-27)
 
 **Core value:** Users can reliably import media, edit clips on a familiar Jianying-style timeline, preview the result, save the draft, and export a video through one consistent editing and rendering model.
-**Current focus:** Phase 20 — long-timeline-product-uat-and-guard-baseline
+**Current focus:** Phase 20 complete — ready for Phase 21 planning/execution
 
 ## Current Position
 
-Phase: 20 (long-timeline-product-uat-and-guard-baseline) — EXECUTING
-Plan: 3 of 4
-Status: Ready to execute
-Last activity: 2026-06-27 — Completed 20-02-PLAN.md
+Phase: 20 (long-timeline-product-uat-and-guard-baseline) — COMPLETE
+Plan: 4 of 4
+Status: Ready for Phase 21
+Last activity: 2026-06-27 — Completed 20-04-PLAN.md
 
-Progress: [█████░░░░░] 50%
+Milestone progress: [██░░░░░░░░] 20%
 
 ## Performance Metrics
 
 **Velocity:**
 
 - Previous milestone completed: v1.0 Production Core, 25 phases and 187 plans
-- v1.1 plans completed: 2
-- v1.1 average duration: 12 min
-- v1.1 total execution time: 24 min
+- v1.1 plans completed: 4
+- v1.1 average duration: 21 min
+- v1.1 total execution time: 82 min
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 20 | 2/4 | 24 min | 12 min |
+| 20 | 4/4 | 82 min | 21 min |
 | 21 | TBD | - | - |
 | 22 | TBD | - | - |
 | 23 | TBD | - | - |
@@ -61,6 +61,8 @@ Progress: [█████░░░░░] 50%
 
 | Phase 20 P01 | 12 min | 3 tasks | 5 files |
 | Phase 20 P02 | 12 min | 2 tasks | 4 files |
+| Phase 20 P03 | 42 min | 3 tasks | 1 file |
+| Phase 20-long-timeline-product-uat-and-guard-baseline P04 | 16 min | 3 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -81,6 +83,9 @@ Recent decisions affecting current work:
 - [Phase 20]: Phase 20 TypeScript fixture code only orchestrates paths/processes while Rust testkit owns the 540 segment draft semantics. — The product UAT must open a generated .veproj instead of relying on TypeScript-authored timeline semantics.
 - [Phase 20]: Canonical long-timeline summaries exclude project/evidence paths and compare only draft semantics. — Save/reopen evidence must ignore absolute temp paths and derived artifacts while preserving material, track, segment, timing, visual, audio, text, canvas, and revision facts.
 - [Phase 20]: Export evidence requires bundled runtime-discovered ffprobe/ffmpeg metadata plus sampled frames; file existence is only a prerequisite. — GATE11-01 rejects file-exists-only product success and PATH/runtime fallback proof.
+- [Phase 20-long-timeline-product-uat-and-guard-baseline]: Phase 20 closeout uses a dedicated source guard plus the shared no-product-fallback guard. — The aggregate runs both explicitly so no guard calls the other recursively.
+- [Phase 20-long-timeline-product-uat-and-guard-baseline]: test:phase20-diagnostic remains non-blocking. — The 3000 segments-per-track ignored diagnostic is available separately and excluded from test:phase20.
+- [Phase 20-long-timeline-product-uat-and-guard-baseline]: test:phase20 is the blocking closeout command. — It requires Rust/testkit proof, source/no-fallback guards, packaged Electron long UAT, cargo check, and generated-contract consistency.
 
 ### Pending Todos
 
@@ -88,7 +93,6 @@ None yet.
 
 ### Blockers/Concerns
 
-- Phase 20 planning must define concrete long-timeline responsiveness budgets, fixture scale, telemetry names, and packaged UAT runtime constraints.
 - Phase 22 planning must decide crop clamp versus reject policy after source-dimension, rounding, even-dimension, fit mode, and preview/export math review.
 - Phase 23 planning must freeze the existing Phase 19 support matrix and diagnostics taxonomy before UI polish.
 
@@ -103,6 +107,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-27T18:19:01.385Z
-Stopped at: Completed 20-02-PLAN.md
+Last session: 2026-06-27T19:39:54.434Z
+Stopped at: Completed 20-04-PLAN.md
 Resume file: None

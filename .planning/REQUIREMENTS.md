@@ -13,7 +13,7 @@
 ### Long Timeline
 
 - [x] **LONG11-01**: User can work on a long multi-track timeline with selection, scroll, zoom, scrub, move, trim, split, undo, redo, and preview within documented responsiveness budgets.
-- [ ] **LONG11-02**: Export, artifact generation, probing, and cache work do not block playhead scrub, inspector edits, preview delivery, or interaction-session commit and cancel paths.
+- [x] **LONG11-02**: Export, artifact generation, probing, and cache work do not block playhead scrub, inspector edits, preview delivery, or interaction-session commit and cancel paths.
 
 ### Interaction And Shortcuts
 
@@ -80,7 +80,7 @@ Traceability is filled during roadmap creation. Each v1.1 requirement must map t
 | UAT11-01 | Phase 20 | Complete |
 | UAT11-02 | Phase 20 | Complete |
 | LONG11-01 | Phase 20 | Complete |
-| LONG11-02 | Phase 20 | Pending |
+| LONG11-02 | Phase 20 | Complete |
 | INT11-01 | Phase 21 | Pending |
 | SHORT11-01 | Phase 21 | Pending |
 | CROP11-01 | Phase 22 | Pending |
