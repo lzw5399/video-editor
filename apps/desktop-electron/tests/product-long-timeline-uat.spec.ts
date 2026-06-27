@@ -1,9 +1,13 @@
-import { expect, test, type ElectronApplication, type Page } from "@playwright/test";
+import { expect, test, type ElectronApplication, type Locator, type Page } from "@playwright/test";
 
 import { generatePhase20LongTimelineFixture, type Phase20LongTimelineFixtures } from "./helpers/longTimelineFixture";
 import {
   collectPhase20FailureEvidence,
+  expectCanonicalDraftStable,
+  expectNoDerivedArtifactPollution,
+  expectPhase20ExportMedia,
   expectPhase20PreviewProductionEvidence,
+  readCanonicalDraftSummary,
   writePhase20EvidenceSummary
 } from "./helpers/longTimelineEvidence";
 import { launchPackagedApp, type PackagedAppLaunch } from "./helpers/packagedApp";
@@ -26,7 +30,7 @@ import {
   type ProductJourneyAppController
 } from "./helpers/userJourney";
 
-test.describe.configure({ timeout: 180_000 });
+test.describe.configure({ timeout: 420_000 });
 
 const PHASE20_PACKAGED_ENV: NodeJS.ProcessEnv = {
   VIDEO_EDITOR_TEST_RECORD_COMMANDS: "1",
@@ -89,7 +93,118 @@ test("Phase 20 packaged responsiveness UAT @phase20 @responsiveness", async () =
 });
 
 test("Phase 20 packaged canonical reopen and export UAT @phase20 @canonical @export", async () => {
-  expect(false, "RED: packaged canonical reopen/export UAT is not implemented yet").toBe(true);
+  const fixtures = await generatePhase20LongTimelineFixture();
+  let launched: Phase20PackagedLaunch | null = null;
+
+  try {
+    const result = await runCanonicalReopenExportWorkflow(fixtures);
+    await writePhase20EvidenceSummary({
+      evidenceDir: fixtures.evidenceDir,
+      status: "passed",
+      workflow: "phase20-packaged-long-session",
+      stage: "canonical-export",
+      productSummary: {
+        message: "Packaged long timeline preserved canonical draft facts through two reopen cycles and two validated exports.",
+        reopenCycles: 2,
+        exportValidations: 2,
+        canonicalFacts: result.canonicalFacts,
+        exportPaths: fixtures.exportPaths
+      },
+      developerDetails: {
+        firstExport: result.firstExport,
+        secondExport: result.secondExport,
+        nativeCommandObservationCounts: result.nativeCommandObservationCounts,
+        projectSessionObservationCounts: result.projectSessionObservationCounts
+      }
+    });
+  } catch (error) {
+    if (launched !== null) {
+      await collectPhase20FailureEvidence({
+        fixtures,
+        workflow: "phase20-packaged-long-session",
+        stage: "canonical-export",
+        error,
+        page: launched.page,
+        app: launched.app,
+        exportPaths: [...fixtures.exportPaths]
+      });
+    } else {
+      await collectPhase20FailureEvidence({
+        fixtures,
+        workflow: "phase20-packaged-long-session",
+        stage: "canonical-export",
+        error,
+        exportPaths: [...fixtures.exportPaths]
+      });
+    }
+    throw error;
+  } finally {
+    await launched?.app.close().catch(() => undefined);
+  }
+
+  async function launch(): Promise<Phase20PackagedLaunch> {
+    await launched?.app.close().catch(() => undefined);
+    launched = await launchPhase20PackagedProject(fixtures);
+    return launched;
+  }
+
+  async function runCanonicalReopenExportWorkflow(
+    workflowFixtures: Phase20LongTimelineFixtures
+  ): Promise<{
+    canonicalFacts: Record<string, number | string>;
+    firstExport: Awaited<ReturnType<typeof expectPhase20ExportMedia>>;
+    secondExport: Awaited<ReturnType<typeof expectPhase20ExportMedia>>;
+    nativeCommandObservationCounts: Record<string, number>;
+    projectSessionObservationCounts: Record<string, number>;
+  }> {
+    const initial = await launch();
+    await expectLongProjectVisible(initial.page);
+    await selectLongVideoSegment(initial.page, FIRST_VIDEO_SEGMENT_LABEL);
+    await editSelectedVisualPositionXThroughInspector(initial.page, initial.app, 64);
+    await expectNoDerivedArtifactPollution(workflowFixtures.bundlePath);
+    const firstSaved = await readCanonicalDraftSummary(workflowFixtures.bundlePath);
+
+    const firstReopen = await launch();
+    await expectLongProjectVisible(firstReopen.page);
+    await expectNoDerivedArtifactPollution(workflowFixtures.bundlePath);
+    const firstReopened = await readCanonicalDraftSummary(workflowFixtures.bundlePath);
+    expectCanonicalDraftStable(firstSaved, firstReopened, "Phase 20 first reopen must preserve canonical draft facts");
+    const firstExport = await exportAndValidatePhase20Media(firstReopen.page, firstReopen.app, workflowFixtures.firstExportPath, workflowFixtures);
+
+    await selectLongVideoSegment(firstReopen.page, SPLIT_VIDEO_SEGMENT_LABEL);
+    await editSelectedVisualPositionXThroughInspector(firstReopen.page, firstReopen.app, 118);
+    await expectNoDerivedArtifactPollution(workflowFixtures.bundlePath);
+    const secondSaved = await readCanonicalDraftSummary(workflowFixtures.bundlePath);
+    expect(secondSaved, "continued edit after first reopen must change canonical facts before second export").not.toEqual(firstSaved);
+
+    const secondReopen = await launch();
+    await expectLongProjectVisible(secondReopen.page);
+    await expectNoDerivedArtifactPollution(workflowFixtures.bundlePath);
+    const secondReopened = await readCanonicalDraftSummary(workflowFixtures.bundlePath);
+    expectCanonicalDraftStable(secondSaved, secondReopened, "Phase 20 second reopen must preserve continued edit facts");
+    const secondExport = await exportAndValidatePhase20Media(
+      secondReopen.page,
+      secondReopen.app,
+      workflowFixtures.secondExportPath,
+      workflowFixtures
+    );
+
+    const nativeCommandObservations = await readNativeCommandObservations(secondReopen.app);
+    const projectSessionObservations = await readProjectSessionCalls(secondReopen.app);
+    return {
+      canonicalFacts: {
+        materialCount: secondReopened.materialCount,
+        trackCount: secondReopened.trackCount,
+        segmentCount: secondReopened.segmentCount,
+        firstRevision: firstReopened.revision ?? "none",
+        secondRevision: secondReopened.revision ?? "none"
+      },
+      firstExport,
+      secondExport,
+      nativeCommandObservationCounts: countCommands(nativeCommandObservations.map((call) => call.command)),
+      projectSessionObservationCounts: countCommands(projectSessionObservations.map((call) => call.command))
+    };
+  }
 });
 
 async function runResponsivenessWorkflow(
@@ -182,6 +297,86 @@ async function runResponsivenessWorkflow(
 
   await expectNoFallbackEvidence(app);
   return metrics;
+}
+
+async function exportAndValidatePhase20Media(
+  page: Page,
+  app: ProductJourneyAppController,
+  outputPath: string,
+  fixtures: Phase20LongTimelineFixtures
+): Promise<Awaited<ReturnType<typeof expectPhase20ExportMedia>>> {
+  await exportPhase20MediaThroughProductUi(page, app, outputPath);
+  return expectPhase20ExportMedia(page, {
+    outputPath,
+    expectedWidth: fixtures.expectedWidth,
+    expectedHeight: fixtures.expectedHeight,
+    expectedFrameRate: fixtures.expectedFrameRate,
+    expectedDurationSeconds: fixtures.expectedDurationSeconds,
+    expectedDurationToleranceSeconds: 1.0,
+    sampleTimesSeconds: [0.5, fixtures.expectedDurationSeconds / 2, fixtures.expectedDurationSeconds - 0.5],
+    editPointSeconds: [1, 2.5, 30],
+    minDistinctSampleHashes: 2,
+    evidenceDir: fixtures.evidenceDir
+  });
+}
+
+async function exportPhase20MediaThroughProductUi(
+  page: Page,
+  app: ProductJourneyAppController,
+  outputPath: string
+): Promise<void> {
+  const nextStartCount = countNativeCommand(await readNativeCommandObservations(app), "startExport") + 1;
+  await page.getByLabel("产品操作").getByRole("button", { name: "导出", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "导出" });
+  await expect(dialog).toBeVisible();
+  await dialog.getByLabel("输出路径").fill(outputPath);
+  await expect(dialog.getByRole("button", { name: "开始导出" })).toBeEnabled({ timeout: 20_000 });
+  await dialog.getByRole("button", { name: "开始导出" }).click();
+  await expect
+    .poll(async () => countNativeCommand(await readNativeCommandObservations(app), "startExport"), { timeout: 30_000 })
+    .toBeGreaterThanOrEqual(nextStartCount);
+  await waitForPhase20ExportCompletion(page, app, dialog);
+  await dialog.getByRole("button", { name: "关闭" }).click();
+  await expect(dialog).toHaveCount(0);
+}
+
+async function waitForPhase20ExportCompletion(
+  page: Page,
+  app: ProductJourneyAppController,
+  dialog: Locator
+): Promise<void> {
+  const statusButton = dialog.getByRole("button", { name: "查询导出状态" });
+  const deadline = Date.now() + 180_000;
+
+  while (Date.now() < deadline) {
+    const progressText = (await dialog.getByLabel("导出进度").textContent()) ?? "";
+    if (progressText.includes("已完成")) {
+      await expect(dialog.getByLabel("导出进度")).toContainText("已完成", { timeout: 5_000 });
+      return;
+    }
+
+    if (await statusButton.isEnabled().catch(() => false)) {
+      const nextStatusCount = countNativeCommand(await readNativeCommandObservations(app), "getExportJobStatus") + 1;
+      await statusButton.click();
+      await expect
+        .poll(async () => countNativeCommand(await readNativeCommandObservations(app), "getExportJobStatus"), { timeout: 20_000 })
+        .toBeGreaterThanOrEqual(nextStatusCount);
+    }
+
+    await page.waitForTimeout(750);
+  }
+
+  const progressText = (await dialog.getByLabel("导出进度").textContent()) ?? "";
+  const logText = (await dialog.getByLabel("导出状态").textContent()) ?? "";
+  const validationText = (await dialog.getByLabel("输出校验").textContent()) ?? "";
+  throw new Error(
+    [
+      `Phase 20 export did not complete before timeout: ${progressText}`,
+      `Export log: ${logText}`,
+      `Export validation: ${validationText}`,
+      `Recorded commands: ${JSON.stringify(await readNativeCommandObservations(app))}`
+    ].join("\n")
+  );
 }
 
 async function launchPhase20PackagedProject(
@@ -384,6 +579,17 @@ async function expectNoFallbackEvidence(app: ProductJourneyAppController): Promi
   expect(hostCalls.map((call) => call.kind), "Phase 20 UAT must not accept missing-compositor fallback").not.toContain(
     "playRejectedMissingCompositor"
   );
+}
+
+function countNativeCommand(calls: Awaited<ReturnType<typeof readNativeCommandObservations>>, command: string): number {
+  return calls.filter((call) => call.command === command).length;
+}
+
+function countCommands(commands: string[]): Record<string, number> {
+  return commands.reduce<Record<string, number>>((counts, command) => {
+    counts[command] = (counts[command] ?? 0) + 1;
+    return counts;
+  }, {});
 }
 
 function phase20Budgets(): Record<string, number> {
