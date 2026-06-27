@@ -17,7 +17,7 @@ created: 2026-06-28
 |----------|-------|
 | Framework | Cargo/Rust tests plus Playwright Test for packaged Electron product UAT |
 | Config file | `Cargo.toml`, `apps/desktop-electron/playwright.config.ts` |
-| Quick run command | `cargo test -p testkit large_timeline_incremental -- --nocapture` plus the narrow Playwright grep created in Wave 0 |
+| Quick run command | `cargo test -p testkit --test large_timeline_incremental phase20_blocking_1000_segments_per_track_keeps_localized_diff_bounded -- --nocapture` plus the narrow Playwright grep created in Wave 0 |
 | Full suite command | `pnpm run test:phase20` |
 | Estimated runtime | Diagnostic quick loop under 5 minutes; full packaged gate may run longer and is blocking for closeout |
 
@@ -32,7 +32,7 @@ created: 2026-06-28
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| 20-W0-rust-fixture | TBD | 0 | UAT11-01, UAT11-02, LONG11-01 | T20-01 | Generated `.veproj` uses canonical project_store semantics and bundle-safe material URIs | Rust integration | `cargo test -p testkit large_timeline_incremental -- --nocapture` | no | pending |
+| 20-W0-rust-fixture | TBD | 0 | UAT11-01, UAT11-02, LONG11-01 | T20-01 | Generated `.veproj` uses canonical project_store semantics and bundle-safe material URIs | Rust integration | `cargo test -p testkit --test long_timeline_product_fixture -- --nocapture` and `cargo test -p testkit --test large_timeline_incremental phase20_blocking_1000_segments_per_track_keeps_localized_diff_bounded -- --nocapture` | no | pending |
 | 20-W0-evidence | TBD | 0 | UAT11-02, GATE11-01 | T20-02 | Evidence helpers reject derived artifacts, fallback preview, and file-exists-only export proof | Playwright helper tests/source guard | `pnpm run test:no-product-fallback && bash scripts/phase20-source-guards.sh` | no | pending |
 | 20-W1-product-uat | TBD | 1 | UAT11-01, LONG11-01 | T20-03 | Packaged app performs normal-user edits against the long project and records compositor evidence | Playwright packaged E2E | `pnpm --filter @video-editor/desktop package:dir && pnpm --filter @video-editor/desktop exec playwright test tests/product-long-timeline-uat.spec.ts --reporter=line --workers=1` | no | pending |
 | 20-W1-canonical-cycles | TBD | 1 | UAT11-02 | T20-04 | Two save/reopen/export cycles preserve normalized canonical draft facts and keep derived artifacts out of `project.json` | Playwright packaged E2E | `pnpm --filter @video-editor/desktop exec playwright test tests/product-long-timeline-uat.spec.ts -g canonical --reporter=line --workers=1` | no | pending |
@@ -52,6 +52,7 @@ created: 2026-06-28
 | Behavior | Requirement | Why Manual | Test Instructions |
 |----------|-------------|------------|-------------------|
 | Product-readable failure wording | D-17 | Error-copy quality is partly editorial, though failure artifacts are automated | Inspect one intentionally failed local run and confirm the product summary names workflow, segment/time/export stage, and developer-detail artifact paths |
+| 3000 segments/track pressure run | D-04 | Explicitly non-blocking diagnostic; excluded from `test:phase20` and automated task verification | Optionally run `cargo test -p testkit --test large_timeline_incremental phase20_diagnostic_3000_segments_per_track_reports_structural_stats -- --ignored --nocapture` when collecting pressure diagnostics |
 
 ## Validation Sign-Off
 
