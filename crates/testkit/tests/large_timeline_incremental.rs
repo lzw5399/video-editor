@@ -1,3 +1,5 @@
+use std::time::Instant;
+
 use draft_model::{
     CanvasAdaptationPolicy, CanvasAspectRatio, CanvasBackground, DirtyDomain, DirtyRange,
     DirtyRangeSource, Draft, DraftCanvasConfig, Microseconds, RationalFrameRate, SegmentOpacity,
@@ -12,7 +14,9 @@ use render_graph::{
     OutputDimensions, RenderGraphDiff, RenderGraphSnapshot, RenderOutputProfile, build_render_graph,
 };
 use testkit::large_timeline::{
-    LargeTimelineConfig, MAX_SEGMENTS_PER_TRACK, assert_no_track_overlaps, build_large_timeline,
+    LargeTimelineConfig, MAX_SEGMENTS_PER_TRACK, PHASE20_BLOCKING_SEGMENTS_PER_TRACK,
+    PHASE20_DIAGNOSTIC_SEGMENTS_PER_TRACK, PHASE20_SEGMENT_DURATION_US, assert_no_track_overlaps,
+    build_large_timeline, phase20_blocking_timeline_config, phase20_diagnostic_timeline_config,
 };
 
 #[test]
@@ -207,6 +211,174 @@ fn large_timeline_incremental_localized_move_has_bounded_graph_diff_dirty_ranges
 
     assert_eq!(invalidated_ids(&result), vec!["old-range", "current-range"]);
     assert_eq!(result.retained.len(), 2);
+}
+
+#[test]
+fn phase20_blocking_1000_segments_per_track_keeps_localized_diff_bounded() {
+    let config = phase20_blocking_timeline_config();
+    assert_eq!(
+        config.segments_per_track,
+        PHASE20_BLOCKING_SEGMENTS_PER_TRACK
+    );
+    assert_eq!(
+        config.segment_duration,
+        Microseconds::new(PHASE20_SEGMENT_DURATION_US)
+    );
+
+    let fixture = build_large_timeline(config).expect("phase 20 blocking fixture should build");
+    validate_draft(&fixture.draft).expect("phase 20 blocking draft should validate");
+    assert_no_track_overlaps(&fixture.draft).expect("phase 20 blocking tracks should not overlap");
+    assert_eq!(fixture.draft.tracks.len(), 3);
+    assert_eq!(
+        fixture.draft.materials.len(),
+        PHASE20_BLOCKING_SEGMENTS_PER_TRACK * 3
+    );
+
+    let full_range = full_draft_range(&fixture.draft);
+    let previous = snapshot_for(&fixture.draft, full_range.clone());
+    let moved_start = fixture.localized_edit.target_timerange.start.get() + 100_000;
+    let mut edited = fixture.draft.clone();
+    segment_mut(
+        &mut edited,
+        fixture.localized_edit.track_kind,
+        fixture.localized_edit.segment_index,
+    )
+    .target_timerange = TargetTimerange::new(
+        moved_start,
+        fixture.localized_edit.target_timerange.duration,
+    );
+    assert_no_track_overlaps(&edited)
+        .expect("phase 20 blocking localized move should stay inside the segment gap");
+    validate_draft(&edited).expect("phase 20 localized move should keep draft valid");
+
+    let current = snapshot_for(&edited, full_range);
+    let dirty_ranges = vec![
+        dirty_range(
+            fixture.localized_edit.target_timerange.start.get(),
+            fixture.localized_edit.target_timerange.duration.get(),
+            DirtyRangeSource::Previous,
+        ),
+        dirty_range(
+            moved_start,
+            fixture.localized_edit.target_timerange.duration.get(),
+            DirtyRangeSource::Current,
+        ),
+    ];
+    let diff = RenderGraphDiff::between(
+        &previous,
+        &current,
+        &dirty_ranges,
+        &[DirtyDomain::Timing, DirtyDomain::GraphSnapshot],
+    );
+    let edited_key = segment_node_key(
+        &fixture.draft,
+        fixture.localized_edit.track_id.as_str(),
+        fixture.localized_edit.segment_id.as_str(),
+        "video",
+    );
+
+    assert!(diff.added.is_empty(), "localized move should add no nodes");
+    assert!(
+        diff.removed.is_empty(),
+        "localized move should remove no nodes"
+    );
+    assert!(
+        changed_keys(&diff).contains(&edited_key),
+        "phase 20 moved segment should be among changed graph nodes"
+    );
+    assert!(
+        diff.changed.len() <= 16,
+        "phase 20 blocking move should keep graph diff bounded, changed={}",
+        diff.changed.len()
+    );
+    assert!(
+        diff.unchanged.len() > diff.changed.len() * 100,
+        "phase 20 blocking graph should remain mostly unchanged: changed={} unchanged={}",
+        diff.changed.len(),
+        diff.unchanged.len()
+    );
+    assert_eq!(diff.dirty_ranges, dirty_ranges);
+    assert!(diff.dirty_domains.contains(&DirtyDomain::Timing));
+    assert!(diff.dirty_domains.contains(&DirtyDomain::GraphSnapshot));
+
+    let entries = vec![
+        cache_entry_with_deps(
+            "phase20-old-range",
+            fixture.localized_edit.target_timerange.start.get(),
+            100_000,
+            &fixture.localized_edit.material_id,
+            &edited_key,
+        ),
+        cache_entry_with_deps(
+            "phase20-current-range",
+            moved_start,
+            100_000,
+            &fixture.localized_edit.material_id,
+            &edited_key,
+        ),
+        cache_entry_with_deps(
+            "phase20-unrelated-before",
+            1_000_000,
+            100_000,
+            &draft_model::MaterialId::new("stable-material"),
+            "stable-node-before",
+        ),
+        cache_entry_with_deps(
+            "phase20-unrelated-after",
+            650_000_000,
+            100_000,
+            &draft_model::MaterialId::new("stable-material"),
+            "stable-node-after",
+        ),
+    ];
+    let result = invalidate_preview_cache(
+        &entries,
+        &PreviewInvalidationRequest::new(
+            diff.dirty_ranges.clone(),
+            [fixture.localized_edit.material_id.clone()],
+            [edited_key],
+            [DirtyDomain::PreviewCache],
+            "phase 20 blocking localized move",
+        ),
+    );
+
+    assert_eq!(
+        invalidated_ids(&result),
+        vec!["phase20-old-range", "phase20-current-range"]
+    );
+    assert_eq!(result.retained.len(), 2);
+}
+
+#[test]
+#[ignore = "Phase 20 diagnostic pressure path is excluded from blocking test aggregates"]
+fn phase20_diagnostic_3000_segments_per_track_reports_structural_stats() {
+    let started = Instant::now();
+    let config = phase20_diagnostic_timeline_config();
+    assert_eq!(
+        config.segments_per_track,
+        PHASE20_DIAGNOSTIC_SEGMENTS_PER_TRACK
+    );
+    let fixture = build_large_timeline(config).expect("phase 20 diagnostic fixture should build");
+    validate_draft(&fixture.draft).expect("phase 20 diagnostic draft should validate");
+    assert_no_track_overlaps(&fixture.draft)
+        .expect("phase 20 diagnostic tracks should not overlap");
+    let full_range = full_draft_range(&fixture.draft);
+    let snapshot = snapshot_for(&fixture.draft, full_range.clone());
+
+    println!(
+        "phase20_diagnostic_stats segments_per_track={} tracks={} total_segments={} full_duration_us={} graph_nodes={} build_and_snapshot_elapsed_ms={}",
+        PHASE20_DIAGNOSTIC_SEGMENTS_PER_TRACK,
+        fixture.draft.tracks.len(),
+        fixture
+            .draft
+            .tracks
+            .iter()
+            .map(|track| track.segments.len())
+            .sum::<usize>(),
+        full_range.duration.get(),
+        snapshot.node_fingerprints.len(),
+        started.elapsed().as_millis()
+    );
 }
 
 #[test]
