@@ -3,16 +3,16 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Usability & Export
 current_phase: 20
-current_phase_name: 1 of 5 in v1.1
-status: planning
+current_phase_name: long-timeline-product-uat-and-guard-baseline
+status: executing
 stopped_at: Phase 20 context gathered
-last_updated: "2026-06-27T16:12:22.036Z"
+last_updated: "2026-06-27T17:44:48.320Z"
 last_activity: 2026-06-27
-last_activity_desc: Created v1.1 roadmap, initialized state digest, and mapped all v1.1 requirements.
+last_activity_desc: Phase 20 execution started
 progress:
   total_phases: 5
   completed_phases: 0
-  total_plans: 0
+  total_plans: 4
   completed_plans: 0
   percent: 0
 ---
@@ -24,14 +24,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-27)
 
 **Core value:** Users can reliably import media, edit clips on a familiar Jianying-style timeline, preview the result, save the draft, and export a video through one consistent editing and rendering model.
-**Current focus:** v1.1 Usability & Export — Phase 20 ready to plan.
+**Current focus:** Phase 20 — long-timeline-product-uat-and-guard-baseline
 
 ## Current Position
 
-Phase: 20 of 24 (1 of 5 in v1.1) — Long Timeline Product UAT And Guard Baseline
-Plan: TBD
-Status: Roadmap created; ready to plan Phase 20
-Last activity: 2026-06-27 — Created v1.1 roadmap, initialized state digest, and mapped all v1.1 requirements.
+Phase: 20 (long-timeline-product-uat-and-guard-baseline) — EXECUTING
+Plan: 1 of 4
+Status: Executing Phase 20
+Last activity: 2026-06-27 — Phase 20 execution started
 
 Progress: [░░░░░░░░░░] 0%
 
