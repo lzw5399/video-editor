@@ -207,6 +207,10 @@ test("Phase 20 packaged canonical reopen and export UAT @phase20 @canonical @exp
   }
 });
 
+test("Phase 20 packaged scheduler pressure UAT @phase20 @pressure", async () => {
+  expect(false, "RED: packaged scheduler pressure UAT is not implemented yet").toBe(true);
+});
+
 async function runResponsivenessWorkflow(
   page: Page,
   app: ProductJourneyAppController,
