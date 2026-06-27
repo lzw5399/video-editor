@@ -77,27 +77,27 @@ Traceability is filled during roadmap creation. Each v1.1 requirement must map t
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| UAT11-01 | TBD | Pending |
-| UAT11-02 | TBD | Pending |
-| LONG11-01 | TBD | Pending |
-| LONG11-02 | TBD | Pending |
-| INT11-01 | TBD | Pending |
-| SHORT11-01 | TBD | Pending |
-| CROP11-01 | TBD | Pending |
-| CROP11-02 | TBD | Pending |
-| EXP11-01 | TBD | Pending |
-| FX11-01 | TBD | Pending |
-| FX11-02 | TBD | Pending |
-| DIAG11-01 | TBD | Pending |
-| ADAPT11-01 | TBD | Pending |
-| GATE11-01 | TBD | Pending |
-| UI11-01 | TBD | Pending |
-| UI11-02 | TBD | Pending |
+| UAT11-01 | Phase 20 | Pending |
+| UAT11-02 | Phase 20 | Pending |
+| LONG11-01 | Phase 20 | Pending |
+| LONG11-02 | Phase 20 | Pending |
+| INT11-01 | Phase 21 | Pending |
+| SHORT11-01 | Phase 21 | Pending |
+| CROP11-01 | Phase 22 | Pending |
+| CROP11-02 | Phase 22 | Pending |
+| EXP11-01 | Phase 22 | Pending |
+| FX11-01 | Phase 23 | Pending |
+| FX11-02 | Phase 23 | Pending |
+| DIAG11-01 | Phase 23 | Pending |
+| ADAPT11-01 | Phase 23 | Pending |
+| GATE11-01 | Phase 20 | Pending |
+| UI11-01 | Phase 24 | Pending |
+| UI11-02 | Phase 24 | Pending |
 
 **Coverage:**
 - v1.1 requirements: 16 total
-- Mapped to phases: 0
-- Unmapped: 16
+- Mapped to phases: 16
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-06-27*
