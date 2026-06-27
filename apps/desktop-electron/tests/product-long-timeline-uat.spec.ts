@@ -20,6 +20,7 @@ import {
   readProjectSessionCalls,
   readNativeCommandObservations,
   readRealtimePreviewHostCalls,
+  readTaskRuntimeTelemetry,
   redoTimelineEdit,
   requestProjectSessionPreviewFrameCount,
   seekTimelinePlayhead,
@@ -27,6 +28,7 @@ import {
   undoTimelineEdit,
   waitForCompositedPreviewEvidence,
   waitForProductPlaybackSuccess,
+  waitForVisiblePreviewCenterChange,
   type ProductJourneyAppController
 } from "./helpers/userJourney";
 
@@ -208,7 +210,43 @@ test("Phase 20 packaged canonical reopen and export UAT @phase20 @canonical @exp
 });
 
 test("Phase 20 packaged scheduler pressure UAT @phase20 @pressure", async () => {
-  expect(false, "RED: packaged scheduler pressure UAT is not implemented yet").toBe(true);
+  const fixtures = await generatePhase20LongTimelineFixture();
+  const launched = await launchPhase20PackagedProject(fixtures);
+
+  try {
+    const result = await runSchedulerPressureWorkflow(launched.page, launched.app, fixtures);
+    await writePhase20EvidenceSummary({
+      evidenceDir: fixtures.evidenceDir,
+      status: "passed",
+      workflow: "phase20-packaged-long-session",
+      stage: "pressure",
+      productSummary: {
+        message: "Packaged long timeline stayed responsive under export, playback, preview, and interaction pressure.",
+        budgets: phase20Budgets(),
+        metrics: result.metrics,
+        scheduler: result.scheduler
+      },
+      developerDetails: {
+        nativeCommandObservations: result.nativeCommandObservations,
+        projectSessionCalls: result.projectSessionCalls,
+        realtimePreviewHostCalls: result.realtimePreviewHostCalls,
+        previewEvidence: result.previewEvidence
+      }
+    });
+  } catch (error) {
+    await collectPhase20FailureEvidence({
+      fixtures,
+      workflow: "phase20-packaged-long-session",
+      stage: "pressure",
+      error,
+      page: launched.page,
+      app: launched.app,
+      exportPaths: [fixtures.firstExportPath]
+    });
+    throw error;
+  } finally {
+    await launched.app.close();
+  }
 });
 
 async function runResponsivenessWorkflow(
@@ -303,6 +341,133 @@ async function runResponsivenessWorkflow(
   return metrics;
 }
 
+async function runSchedulerPressureWorkflow(
+  page: Page,
+  app: ProductJourneyAppController,
+  fixtures: Phase20LongTimelineFixtures
+): Promise<{
+  metrics: Record<string, number | string | boolean>;
+  scheduler: Awaited<ReturnType<typeof readTaskRuntimeTelemetry>>;
+  nativeCommandObservations: Awaited<ReturnType<typeof readNativeCommandObservations>>;
+  projectSessionCalls: Awaited<ReturnType<typeof readProjectSessionCalls>>;
+  realtimePreviewHostCalls: Awaited<ReturnType<typeof readRealtimePreviewHostCalls>>;
+  previewEvidence: Record<string, unknown>;
+}> {
+  await expectLongProjectVisible(page);
+  await zoomTimelineTo(page, 200);
+  await selectLongVideoSegment(page, FIRST_VIDEO_SEGMENT_LABEL);
+  await seekTimelinePlayhead(page, app, 0);
+
+  const frameRequestsBeforePlay = requestProjectSessionPreviewFrameCount(await readNativeCommandObservations(app));
+  const previewBeforePlay = await waitForCompositedPreviewEvidence(page, app, 20_000, -1);
+  const visibleBeforePlay = await captureVisiblePreviewEvidence(page, app);
+  const telemetryBeforePressure = await readTaskRuntimeTelemetry(page);
+
+  await activateProductJourneyApp(app, page);
+  await clickPreviewPlay(page);
+  const playbackEvidence = await waitForProductPlaybackSuccess(
+    page,
+    app,
+    previewBeforePlay,
+    visibleBeforePlay,
+    frameRequestsBeforePlay,
+    20_000
+  );
+
+  await startPhase20ExportPressureThroughProductUi(page, app, fixtures.firstExportPath);
+  const telemetryAfterPressure = await waitForSchedulerTelemetryProgress(page, telemetryBeforePressure);
+
+  const metrics: Record<string, number | string | boolean> = {};
+  const scrubBefore = await captureVisiblePreviewEvidence(page, app);
+  const frameRequestsBeforeScrub = requestProjectSessionPreviewFrameCount(await readNativeCommandObservations(app));
+  metrics.scrubMs = await expectWithinBudget("pressure scrub visible feedback", RESPONSIVE_FEEDBACK_BUDGET_MS, async () => {
+    await seekTimelinePlayhead(page, app, 75_000_000);
+  });
+  await waitForVisiblePreviewCenterChange(page, app, scrubBefore.visibleCenterHash, 8_000);
+  await waitForCompositedPreviewEvidence(page, app, 20_000, scrubBefore.hostState?.contentEvidence?.targetTimeMicroseconds ?? -1);
+  const scrubAfter = await captureVisiblePreviewEvidence(page, app);
+  expectPhase20PreviewProductionEvidence({
+    before: scrubBefore,
+    after: scrubAfter,
+    frameRequestsBefore: frameRequestsBeforeScrub,
+    frameRequestsAfter: requestProjectSessionPreviewFrameCount(await readNativeCommandObservations(app))
+  });
+
+  await selectLongVideoSegment(page, SPLIT_VIDEO_SEGMENT_LABEL);
+  metrics.inspectorEditMs = await expectWithinBudget("pressure inspector visual edit", INSPECTOR_EDIT_BUDGET_MS, async () => {
+    await editSelectedVisualPositionXThroughInspector(page, app, 156);
+  });
+
+  metrics.commitMs = await expectWithinBudget("pressure interaction commit", EDIT_OPERATION_BUDGET_MS, async () => {
+    await moveSelectedSegmentRightForLongTimeline(page, app);
+  });
+
+  metrics.cancelMs = await expectWithinBudget("pressure interaction cancel", EDIT_OPERATION_BUDGET_MS, async () => {
+    await cancelSelectedSegmentMoveForLongTimeline(page, app);
+  });
+
+  const telemetryAfterInteractions = await readTaskRuntimeTelemetry(page);
+  const nativeCommandObservations = await readNativeCommandObservations(app);
+  const projectSessionCalls = await readProjectSessionCalls(app);
+  const realtimePreviewHostCalls = await readRealtimePreviewHostCalls(app);
+  const hostKinds = realtimePreviewHostCalls.map((call) => call.kind);
+  const timelineMoveTrimCommits = projectSessionCalls.filter(
+    (call) => call.command === "commitProjectInteraction" && call.interactionKind === "timelineMoveTrim" && call.resultOk === true
+  ).length;
+  const timelineMoveTrimCancels = projectSessionCalls.filter(
+    (call) => call.command === "cancelProjectInteraction" && call.interactionKind === "timelineMoveTrim" && call.resultOk === true
+  ).length;
+
+  expect(timelineMoveTrimCommits, "pressure workflow must record a visible UI commitProjectInteraction").toBeGreaterThan(0);
+  expect(timelineMoveTrimCancels, "pressure workflow must record a visible UI cancelProjectInteraction").toBeGreaterThan(0);
+  expect(nativeCommandObservations.some((call) => call.command === "startExport"), "pressure workflow must start export from product UI").toBe(
+    true
+  );
+  expect(
+    nativeCommandObservations.some((call) => call.command === "getTaskRuntimeTelemetry"),
+    "pressure workflow must read scheduler telemetry through the product-safe API"
+  ).toBe(true);
+  expect(telemetryAfterInteractions.status, "scheduler telemetry must stay product-ready").toBe("ready");
+  expect(telemetryAfterInteractions.submittedCount, "scheduler must record submitted pressure work").toBeGreaterThan(
+    telemetryBeforePressure.submittedCount
+  );
+  expect(telemetryAfterInteractions.queueLatencyUs.sampleCount, "queueLatencyUs must include scheduler samples").toBeGreaterThan(0);
+  expect(
+    telemetryAfterInteractions.queueLatencyUs.p95 ?? 0,
+    "queueLatencyUs.p95 must stay bounded under pressure"
+  ).toBeLessThanOrEqual(2_000_000);
+  expect(telemetryAfterInteractions.rejectedCount, "normal product work must not be rejected under pressure").toBe(0);
+  expect(telemetryAfterInteractions.fallbackCount, "pressure success must not use scheduler fallback").toBe(0);
+  expect(telemetryAfterInteractions.staleRejectedCount, "scheduler must expose stale-generation rejection telemetry").toBeGreaterThanOrEqual(
+    0
+  );
+  expect(hostKinds, "host calls must not reject playback because the compositor is missing").not.toContain("playRejectedMissingCompositor");
+  expectNoStaleGenerationPresentation(realtimePreviewHostCalls);
+
+  metrics.renderGraphGpuComposited = scrubAfter.hostState?.contentEvidence?.source === "renderGraphGpuComposited";
+  metrics.queueLatencyP95Us = telemetryAfterInteractions.queueLatencyUs.p95 ?? 0;
+  metrics.rejectedCount = telemetryAfterInteractions.rejectedCount;
+  metrics.fallbackCount = telemetryAfterInteractions.fallbackCount;
+  metrics.staleRejectedCount = telemetryAfterInteractions.staleRejectedCount;
+  metrics.submittedDelta = telemetryAfterInteractions.submittedCount - telemetryBeforePressure.submittedCount;
+  metrics.pressureSubmittedDelta = telemetryAfterPressure.submittedCount - telemetryBeforePressure.submittedCount;
+
+  return {
+    metrics,
+    scheduler: telemetryAfterInteractions,
+    nativeCommandObservations,
+    projectSessionCalls,
+    realtimePreviewHostCalls,
+    previewEvidence: {
+      beforePlay: previewBeforePlay,
+      playbackAfter: playbackEvidence.after,
+      playbackVisibleMotion: playbackEvidence.visibleMotion,
+      scrubBefore,
+      scrubAfter
+    }
+  };
+}
+
 async function exportAndValidatePhase20Media(
   page: Page,
   app: ProductJourneyAppController,
@@ -342,6 +507,43 @@ async function exportPhase20MediaThroughProductUi(
   await waitForPhase20ExportCompletion(page, app, dialog);
   await dialog.getByRole("button", { name: "关闭" }).click();
   await expect(dialog).toHaveCount(0);
+}
+
+async function startPhase20ExportPressureThroughProductUi(
+  page: Page,
+  app: ProductJourneyAppController,
+  outputPath: string
+): Promise<void> {
+  const nextStartCount = countNativeCommand(await readNativeCommandObservations(app), "startExport") + 1;
+  await page.getByLabel("产品操作").getByRole("button", { name: "导出", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "导出" });
+  await expect(dialog).toBeVisible();
+  await dialog.getByLabel("输出路径").fill(outputPath);
+  await expect(dialog.getByRole("button", { name: "开始导出" })).toBeEnabled({ timeout: 20_000 });
+  await dialog.getByRole("button", { name: "开始导出" }).click();
+  await expect
+    .poll(async () => countNativeCommand(await readNativeCommandObservations(app), "startExport"), { timeout: 30_000 })
+    .toBeGreaterThanOrEqual(nextStartCount);
+  await expect(dialog.getByLabel("导出进度")).toContainText(/排队中|导出中|校验中|已完成/, { timeout: 20_000 });
+  await dialog.getByRole("button", { name: "关闭" }).click();
+  await expect(dialog).toHaveCount(0);
+}
+
+async function waitForSchedulerTelemetryProgress(
+  page: Page,
+  before: Awaited<ReturnType<typeof readTaskRuntimeTelemetry>>
+): Promise<Awaited<ReturnType<typeof readTaskRuntimeTelemetry>>> {
+  let latest = before;
+  await expect
+    .poll(
+      async () => {
+        latest = await readTaskRuntimeTelemetry(page);
+        return latest.submittedCount;
+      },
+      { timeout: 20_000 }
+    )
+    .toBeGreaterThan(before.submittedCount);
+  return latest;
 }
 
 async function waitForPhase20ExportCompletion(
@@ -529,6 +731,31 @@ async function moveSelectedSegmentRightForLongTimeline(
   await waitForTimelineMoveTrimCommitCount(app, nextCount);
 }
 
+async function cancelSelectedSegmentMoveForLongTimeline(
+  page: Page,
+  app: ProductJourneyAppController
+): Promise<void> {
+  const beforeCalls = await readProjectSessionCalls(app);
+  const nextCancelCount = timelineMoveTrimCancelCount(beforeCalls) + 1;
+  const nextBeginCount = timelineMoveTrimBeginCount(beforeCalls) + 1;
+  const segment = page.locator(".segment-block.selected").first();
+  const segmentBox = await segment.boundingBox();
+  if (segmentBox === null) {
+    throw new Error("Selected long timeline segment is not visible for cancel interaction");
+  }
+  const startX = segmentBox.x + segmentBox.width / 2;
+  const startY = segmentBox.y + segmentBox.height / 2;
+  await page.mouse.move(startX, startY);
+  await page.mouse.down();
+  await expect.poll(async () => timelineMoveTrimBeginCount(await readProjectSessionCalls(app)), { timeout: 10_000 }).toBeGreaterThanOrEqual(
+    nextBeginCount
+  );
+  await page.mouse.up();
+  await expect
+    .poll(async () => timelineMoveTrimCancelCount(await readProjectSessionCalls(app)), { timeout: 10_000 })
+    .toBeGreaterThanOrEqual(nextCancelCount);
+}
+
 async function editSelectedVisualPositionXThroughInspector(
   page: Page,
   app: ProductJourneyAppController,
@@ -559,6 +786,16 @@ async function waitForTimelineMoveTrimCommitCount(
 async function timelineMoveTrimCommitCount(app: ProductJourneyAppController): Promise<number> {
   return (await readProjectSessionCalls(app)).filter(
     (call) => call.command === "commitProjectInteraction" && call.interactionKind === "timelineMoveTrim" && call.resultOk === true
+  ).length;
+}
+
+function timelineMoveTrimBeginCount(calls: Awaited<ReturnType<typeof readProjectSessionCalls>>): number {
+  return calls.filter((call) => call.command === "beginProjectInteraction" && call.interactionKind === "timelineMoveTrim").length;
+}
+
+function timelineMoveTrimCancelCount(calls: Awaited<ReturnType<typeof readProjectSessionCalls>>): number {
+  return calls.filter(
+    (call) => call.command === "cancelProjectInteraction" && call.interactionKind === "timelineMoveTrim" && call.resultOk === true
   ).length;
 }
 
@@ -594,6 +831,21 @@ function countCommands(commands: string[]): Record<string, number> {
     counts[command] = (counts[command] ?? 0) + 1;
     return counts;
   }, {});
+}
+
+function expectNoStaleGenerationPresentation(calls: Awaited<ReturnType<typeof readRealtimePreviewHostCalls>>): void {
+  const presentedStates = calls.filter(
+    (call) =>
+      call.kind === "getPresentationState" &&
+      call.presentationAvailable === true &&
+      call.presentationBackend === "renderGraphGpu" &&
+      typeof call.playbackGeneration === "number"
+  );
+  expect(presentedStates.length, "pressure workflow must observe renderGraphGpu presentation states").toBeGreaterThan(0);
+  expect(
+    calls.filter((call) => /stale.*present/i.test(call.kind)),
+    "stale realtime preview generations must be rejected rather than presented"
+  ).toEqual([]);
 }
 
 function phase20Budgets(): Record<string, number> {
