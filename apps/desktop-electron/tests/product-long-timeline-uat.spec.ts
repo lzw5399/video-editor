@@ -556,6 +556,18 @@ async function waitForPhase20ExportCompletion(
 
   while (Date.now() < deadline) {
     const progressText = (await dialog.getByLabel("导出进度").textContent()) ?? "";
+    const logText = (await dialog.getByLabel("导出状态", { exact: true }).textContent()) ?? "";
+    const validationText = (await dialog.getByLabel("输出校验").textContent()) ?? "";
+    if (progressText.includes("失败") || logText.includes("失败") || validationText.includes("失败")) {
+      throw new Error(
+        [
+          `Phase 20 export failed: ${progressText}`,
+          `Export log: ${logText}`,
+          `Export validation: ${validationText}`,
+          `Recorded commands: ${JSON.stringify(await readNativeCommandObservations(app))}`
+        ].join("\n")
+      );
+    }
     if (progressText.includes("已完成")) {
       await expect(dialog.getByLabel("导出进度")).toContainText("已完成", { timeout: 5_000 });
       return;
@@ -573,7 +585,7 @@ async function waitForPhase20ExportCompletion(
   }
 
   const progressText = (await dialog.getByLabel("导出进度").textContent()) ?? "";
-  const logText = (await dialog.getByLabel("导出状态").textContent()) ?? "";
+  const logText = (await dialog.getByLabel("导出状态", { exact: true }).textContent()) ?? "";
   const validationText = (await dialog.getByLabel("输出校验").textContent()) ?? "";
   throw new Error(
     [
