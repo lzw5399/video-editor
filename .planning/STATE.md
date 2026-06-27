@@ -5,15 +5,15 @@ milestone_name: Usability & Export
 current_phase: 20
 current_phase_name: long-timeline-product-uat-and-guard-baseline
 status: executing
-stopped_at: Phase 20 context gathered
-last_updated: "2026-06-27T17:44:48.320Z"
+stopped_at: Completed 20-01-PLAN.md
+last_updated: "2026-06-27T18:02:32.120Z"
 last_activity: 2026-06-27
 last_activity_desc: Phase 20 execution started
 progress:
   total_phases: 5
   completed_phases: 0
   total_plans: 4
-  completed_plans: 0
+  completed_plans: 1
   percent: 0
 ---
 
@@ -29,8 +29,8 @@ See: .planning/PROJECT.md (updated 2026-06-27)
 ## Current Position
 
 Phase: 20 (long-timeline-product-uat-and-guard-baseline) — EXECUTING
-Plan: 1 of 4
-Status: Executing Phase 20
+Plan: 2 of 4
+Status: Ready to execute
 Last activity: 2026-06-27 — Phase 20 execution started
 
 Progress: [░░░░░░░░░░] 0%
@@ -59,6 +59,8 @@ Progress: [░░░░░░░░░░] 0%
 - Last completed milestone: v1.0 shipped 2026-06-26
 - Trend: new milestone baseline
 
+| Phase 20 P01 | 12 min | 3 tasks | 5 files |
+
 ## Accumulated Context
 
 ### Decisions
@@ -72,6 +74,9 @@ Recent decisions affecting current work:
 - Crop/export closure must happen in the Rust compiler/runtime path, not through UI-only clamping.
 - Phase 19 parity means reliability for the existing capability set; broader effect/provider expansion stays deferred.
 - UI polish comes after semantic/export/diagnostic closure and must not expose unsupported controls as active.
+- [Phase 20]: Phase 20 product fixture remains Rust-owned and contiguous at 180 segments per track with 1,000,000 microseconds per segment. — The product UAT must open a generated .veproj instead of relying on TypeScript-authored timeline semantics.
+- [Phase 20]: Phase 20 pressure gates use target stride slack only for 1000/3000 segment Rust tests. — Structural boundedness tests need overlap-free localized moves while preserving the exact product fixture scale.
+- [Phase 20]: Phase 20 materializer saves and reopens only through project_store before reporting success. — Canonical .veproj/project.json must stay the source of truth and exclude derived runtime/export/cache artifacts.
 
 ### Pending Todos
 
@@ -94,6 +99,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-27T16:12:22.030Z
-Stopped at: Phase 20 context gathered
-Resume file: .planning/phases/20-long-timeline-product-uat-and-guard-baseline/20-CONTEXT.md
+Last session: 2026-06-27T18:02:32.116Z
+Stopped at: Completed 20-01-PLAN.md
+Resume file: None

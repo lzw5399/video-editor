@@ -7,12 +7,12 @@
 
 ### Real Editing UAT
 
-- [ ] **UAT11-01**: User can complete a packaged product E2E session that imports mixed media, edits a long timeline, previews through the production compositor, saves, reopens, exports, and continues editing.
-- [ ] **UAT11-02**: User can repeat edit, save, reopen, and export cycles without semantic drift, stale preview/export state, or derived artifact pollution of `.veproj/project.json`.
+- [x] **UAT11-01**: User can complete a packaged product E2E session that imports mixed media, edits a long timeline, previews through the production compositor, saves, reopens, exports, and continues editing.
+- [x] **UAT11-02**: User can repeat edit, save, reopen, and export cycles without semantic drift, stale preview/export state, or derived artifact pollution of `.veproj/project.json`.
 
 ### Long Timeline
 
-- [ ] **LONG11-01**: User can work on a long multi-track timeline with selection, scroll, zoom, scrub, move, trim, split, undo, redo, and preview within documented responsiveness budgets.
+- [x] **LONG11-01**: User can work on a long multi-track timeline with selection, scroll, zoom, scrub, move, trim, split, undo, redo, and preview within documented responsiveness budgets.
 - [ ] **LONG11-02**: Export, artifact generation, probing, and cache work do not block playhead scrub, inspector edits, preview delivery, or interaction-session commit and cancel paths.
 
 ### Interaction And Shortcuts
@@ -77,9 +77,9 @@ Traceability is filled during roadmap creation. Each v1.1 requirement must map t
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| UAT11-01 | Phase 20 | Pending |
-| UAT11-02 | Phase 20 | Pending |
-| LONG11-01 | Phase 20 | Pending |
+| UAT11-01 | Phase 20 | Complete |
+| UAT11-02 | Phase 20 | Complete |
+| LONG11-01 | Phase 20 | Complete |
 | LONG11-02 | Phase 20 | Pending |
 | INT11-01 | Phase 21 | Pending |
 | SHORT11-01 | Phase 21 | Pending |
@@ -95,6 +95,7 @@ Traceability is filled during roadmap creation. Each v1.1 requirement must map t
 | UI11-02 | Phase 24 | Pending |
 
 **Coverage:**
+
 - v1.1 requirements: 16 total
 - Mapped to phases: 16
 - Unmapped: 0
