@@ -1,4 +1,5 @@
 use std::collections::BTreeSet;
+use std::path::Path;
 
 use draft_model::{
     Microseconds, TargetTimerange, TextAlignment, repository_root_from_manifest,
@@ -71,24 +72,67 @@ pub fn generate_ass_sidecars(
         ));
     }
 
-    graph
+    let overlays = graph
         .text_overlays
         .iter()
         .map(|overlay| {
             reject_unsupported_text_resources(overlay)?;
             let font = resolve_text_font(overlay, &context.capabilities.text)?;
-            let segment_id = overlay.overlay.segment_id.as_str();
+            Ok(ResolvedAssOverlay { overlay, font })
+        })
+        .collect::<Result<Vec<_>, FfmpegCompileError>>()?;
+
+    if can_compile_single_ass_sidecar(&overlays) {
+        let sidecar_id = format!("{job_id}-text");
+        let path = context.artifact_path(&format!("{sidecar_id}.ass"));
+        return Ok(vec![FfmpegSidecar {
+            sidecar_id,
+            kind: FfmpegSidecarKind::AssSubtitle,
+            segment_id: None,
+            path,
+            contents: ass_contents_many(graph, output_timerange(plan), &overlays),
+        }]);
+    }
+
+    overlays
+        .iter()
+        .map(|entry| {
+            let segment_id = entry.overlay.overlay.segment_id.as_str();
             let sidecar_id = format!("{job_id}-text-{}", sanitize_id(segment_id));
             let path = context.artifact_path(&format!("{sidecar_id}.ass"));
             Ok(FfmpegSidecar {
                 sidecar_id,
                 kind: FfmpegSidecarKind::AssSubtitle,
-                segment_id: Some(overlay.overlay.segment_id.clone()),
+                segment_id: Some(entry.overlay.overlay.segment_id.clone()),
                 path,
-                contents: ass_contents(graph, output_timerange(plan), overlay, &font),
+                contents: ass_contents(graph, output_timerange(plan), entry.overlay, &entry.font),
             })
         })
         .collect()
+}
+
+struct ResolvedAssOverlay<'a> {
+    overlay: &'a RenderTextOverlay,
+    font: ResolvedTextFont,
+}
+
+fn can_compile_single_ass_sidecar(overlays: &[ResolvedAssOverlay<'_>]) -> bool {
+    let Some(first) = overlays.first() else {
+        return false;
+    };
+    let Some(first_dir) = font_parent_dir(&first.font.path) else {
+        return false;
+    };
+    overlays
+        .iter()
+        .all(|entry| font_parent_dir(&entry.font.path).as_deref() == Some(first_dir.as_str()))
+}
+
+fn font_parent_dir(path: &str) -> Option<String> {
+    Path::new(path)
+        .parent()
+        .map(|parent| parent.to_string_lossy().into_owned())
+        .filter(|parent| !parent.is_empty())
 }
 
 pub fn resolve_text_font(
@@ -190,6 +234,65 @@ fn ass_contents(
     overlay: &RenderTextOverlay,
     font: &ResolvedTextFont,
 ) -> String {
+    ass_contents_many(
+        graph,
+        output_timerange,
+        &[ResolvedAssOverlay {
+            overlay,
+            font: font.clone(),
+        }],
+    )
+}
+
+fn ass_contents_many(
+    graph: &RenderGraph,
+    output_timerange: &TargetTimerange,
+    overlays: &[ResolvedAssOverlay<'_>],
+) -> String {
+    let mut font_paths = overlays
+        .iter()
+        .map(|entry| entry.font.path.as_str())
+        .collect::<Vec<_>>();
+    font_paths.sort();
+    font_paths.dedup();
+
+    let font_path_comments = font_paths
+        .iter()
+        .map(|font_path| format!("; FontPath: {font_path}\n"))
+        .collect::<String>();
+
+    let mut styles = Vec::new();
+    let mut events = Vec::new();
+    for (index, entry) in overlays.iter().enumerate() {
+        styles.push(ass_style_line(index, entry.overlay, &entry.font));
+        events.push(ass_dialogue_line(index, output_timerange, entry.overlay));
+    }
+
+    format!(
+        concat!(
+            "[Script Info]\n",
+            "ScriptType: v4.00+\n",
+            "WrapStyle: 2\n",
+            "ScaledBorderAndShadow: yes\n",
+            "PlayResX: {play_res_x}\n",
+            "PlayResY: {play_res_y}\n",
+            "{font_path_comments}\n",
+            "[V4+ Styles]\n",
+            "Format: Name, Fontname, Fontsize, PrimaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\n",
+            "{styles}\n",
+            "[Events]\n",
+            "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n",
+            "{events}"
+        ),
+        play_res_x = graph.canvas.width,
+        play_res_y = graph.canvas.height,
+        font_path_comments = font_path_comments,
+        styles = styles.join(""),
+        events = events.join("")
+    )
+}
+
+fn ass_style_line(index: usize, overlay: &RenderTextOverlay, font: &ResolvedTextFont) -> String {
     let style = &overlay.overlay.style;
     let stroke = style.stroke.as_ref();
     let shadow = style.shadow.as_ref();
@@ -209,31 +312,15 @@ fn ass_contents(
         overlay.overlay.font_size,
         overlay.overlay.letter_spacing_millis,
     );
-    let (event_start, event_end) =
-        clipped_event_timerange(output_timerange, &overlay.overlay.target_timerange);
 
     format!(
         concat!(
-            "[Script Info]\n",
-            "ScriptType: v4.00+\n",
-            "WrapStyle: 2\n",
-            "ScaledBorderAndShadow: yes\n",
-            "PlayResX: {play_res_x}\n",
-            "PlayResY: {play_res_y}\n",
-            "; FontPath: {font_path}\n",
             "; TextBox: {text_box_width}x{text_box_height}\n",
             "; LayoutRegion: {layout_x},{layout_y} {layout_width}x{layout_height}\n",
-            "; LineHeightMillis: {line_height_millis}\n\n",
-            "[V4+ Styles]\n",
-            "Format: Name, Fontname, Fontsize, PrimaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\n",
-            "Style: Default,{font_family},{font_size},{primary},{outline},{back},0,0,0,0,100,100,{spacing},0,{border_style},{outline_width},{shadow_size},{alignment},{margin_l},{margin_r},{margin_v},1\n\n",
-            "[Events]\n",
-            "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n",
-            "Dialogue: {layer},{start},{end},Default,{name},{margin_l},{margin_r},{margin_v},,{text}\n"
+            "; LineHeightMillis: {line_height_millis}\n",
+            "Style: {style_name},{font_family},{font_size},{primary},{outline},{back},0,0,0,0,100,100,{spacing},0,{border_style},{outline_width},{shadow_size},{alignment},{margin_l},{margin_r},{margin_v},1\n"
         ),
-        play_res_x = graph.canvas.width,
-        play_res_y = graph.canvas.height,
-        font_path = font.path,
+        style_name = ass_style_name(index, overlay),
         text_box_width = overlay.overlay.text_box.width,
         text_box_height = overlay.overlay.text_box.height,
         layout_x = overlay.overlay.layout_region.x,
@@ -265,12 +352,36 @@ fn ass_contents(
         alignment = alignment,
         margin_l = overlay.overlay.safe_area.left,
         margin_r = overlay.overlay.safe_area.right,
-        margin_v = overlay.overlay.safe_area.bottom,
+        margin_v = overlay.overlay.safe_area.bottom
+    )
+}
+
+fn ass_dialogue_line(
+    index: usize,
+    output_timerange: &TargetTimerange,
+    overlay: &RenderTextOverlay,
+) -> String {
+    let (event_start, event_end) =
+        clipped_event_timerange(output_timerange, &overlay.overlay.target_timerange);
+    format!(
+        "Dialogue: {layer},{start},{end},{style_name},{name},{margin_l},{margin_r},{margin_v},,{text}\n",
         layer = overlay.overlay.stack_index,
         start = ass_time(event_start),
         end = ass_time(event_end),
+        style_name = ass_style_name(index, overlay),
         name = overlay.overlay.segment_id.as_str(),
-        text = escape_ass_text(&overlay.overlay.content)
+        margin_l = overlay.overlay.safe_area.left,
+        margin_r = overlay.overlay.safe_area.right,
+        margin_v = overlay.overlay.safe_area.bottom,
+        text = escape_ass_text(&overlay.overlay.content),
+    )
+}
+
+fn ass_style_name(index: usize, overlay: &RenderTextOverlay) -> String {
+    format!(
+        "Style{}_{}",
+        index,
+        sanitize_id(overlay.overlay.segment_id.as_str())
     )
 }
 

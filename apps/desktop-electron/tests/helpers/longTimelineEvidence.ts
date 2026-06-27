@@ -1,7 +1,7 @@
 import { expect, type Page, type TestInfo } from "@playwright/test";
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
-import { access, mkdir, readFile, writeFile } from "node:fs/promises";
+import { access, mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { promisify } from "node:util";
 
@@ -602,11 +602,11 @@ async function collectCanonicalSummaries(bundlePaths: string[]): Promise<Array<C
 async function collectExportFileFacts(exportPaths: string[]): Promise<Array<{ path: string; exists: boolean; size?: number }>> {
   return Promise.all(
     [...new Set(exportPaths)].map(async (path) => {
-      const exists = await access(path).then(
-        () => true,
-        () => false
-      );
-      return { path, exists };
+      const file = await stat(path).catch(() => null);
+      if (file === null) {
+        return { path, exists: false };
+      }
+      return { path, exists: true, size: file.size };
     })
   );
 }

@@ -2,8 +2,9 @@ use std::collections::BTreeMap;
 use std::path::Path;
 
 use draft_model::{
-    MaterialId, MaterialKind, Microseconds, SegmentBackgroundFilling, SegmentCrop, SegmentFitMode,
-    SegmentId, SegmentScale, SegmentVisual, SourceTimerange, TargetTimerange,
+    MaterialId, MaterialKind, Microseconds, RetimeMode, SegmentBackgroundFilling, SegmentBlendMode,
+    SegmentCrop, SegmentFitMode, SegmentId, SegmentMask, SegmentScale, SegmentVisual,
+    SourceTimerange, TargetTimerange,
 };
 use render_graph::{
     OutputDimensions, RenderAudioEffectSlotSupport, RenderAudioMix, RenderAudioMixDiagnostic,
@@ -60,10 +61,23 @@ struct VisualLayerFilter {
     segment_id: SegmentId,
     label: String,
     transition: Option<RenderTransitionIntent>,
+    dimensions: LayerDimensions,
     placement: LayerPlacement,
     active_start: Microseconds,
     active_end: Microseconds,
     lines: Vec<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum LayerTimelineAlignment {
+    OutputTimeline,
+    SegmentLocal,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AudioTimelineAlignment {
+    OutputTimeline,
+    TrackLocal,
 }
 
 pub fn generate_filter_script(
@@ -75,15 +89,6 @@ pub fn generate_filter_script(
 ) -> Result<GeneratedFilterScript, FfmpegCompileError> {
     let path = context.artifact_path(&format!("{job_id}-filter.ffscript"));
     let input_indexes = input_index_by_material(inputs);
-    let ass_by_segment = ass_sidecars
-        .iter()
-        .filter_map(|sidecar| {
-            sidecar
-                .segment_id
-                .as_ref()
-                .map(|segment_id| (sanitize_id(segment_id.as_str()), sidecar))
-        })
-        .collect::<BTreeMap<_, _>>();
 
     let dimensions = match &plan.output_profile {
         RenderOutputProfile::PreviewFrame { dimensions, .. }
@@ -93,6 +98,18 @@ pub fn generate_filter_script(
 
     let mut lines = Vec::new();
     let material_dimensions = material_dimensions_by_id(plan);
+    let concat_visual_post_filters = concat_visual_post_filters(
+        plan,
+        output_layer_dimensions(dimensions),
+        &material_dimensions,
+    );
+    let concat_visual_layers = concat_visual_post_filters.is_some();
+    let visual_alignment = if concat_visual_layers {
+        LayerTimelineAlignment::SegmentLocal
+    } else {
+        LayerTimelineAlignment::OutputTimeline
+    };
+
     let mut visual_layers = Vec::new();
     for (layer_index, layer) in plan.graph.video_layers.iter().enumerate() {
         let input_index = input_indexes
@@ -113,11 +130,14 @@ pub fn generate_filter_script(
             source_dimensions,
             output_layer_dimensions(dimensions),
             plan,
+            visual_alignment,
         );
         lines.extend(visual_layer.lines.iter().cloned());
         visual_layers.push(visual_layer);
     }
-    append_transition_filters(&mut lines, &mut visual_layers, output_timerange(plan));
+    if !concat_visual_layers {
+        append_transition_filters(&mut lines, &mut visual_layers, output_timerange(plan));
+    }
 
     let mut current_video = if visual_layers.is_empty() {
         let background_color = canvas_background_color_arg(plan);
@@ -129,22 +149,24 @@ pub fn generate_filter_script(
             duration = format_seconds(output_duration(plan))
         ));
         "vbase0".to_owned()
+    } else if concat_visual_layers {
+        compose_concatenated_visual_layers(
+            &mut lines,
+            &visual_layers,
+            concat_visual_post_filters.as_deref().unwrap_or(&[]),
+        )
     } else {
         compose_placed_visual_layers(&mut lines, plan, dimensions, &visual_layers)
     };
 
-    for (text_index, overlay) in plan.graph.text_overlays.iter().enumerate() {
-        let segment_key = sanitize_id(overlay.overlay.segment_id.as_str());
-        let sidecar = ass_by_segment.get(&segment_key).ok_or_else(|| {
-            FfmpegCompileError::new(
-                FfmpegCompileErrorKind::MissingTextFont,
-                format!(
-                    "text segment {} did not produce an ASS sidecar",
-                    overlay.overlay.segment_id.as_str()
-                ),
-                "Compile ASS sidecars before generating the filter script.",
-            )
-        })?;
+    if !plan.graph.text_overlays.is_empty() && ass_sidecars.is_empty() {
+        return Err(FfmpegCompileError::new(
+            FfmpegCompileErrorKind::MissingTextFont,
+            "text overlays did not produce an ASS sidecar",
+            "Compile ASS sidecars before generating the filter script.",
+        ));
+    }
+    for (text_index, sidecar) in ass_sidecars.iter().enumerate() {
         let out = format!("vtext{text_index}");
         lines.push(format!(
             "[{current_video}]{}[{out}]",
@@ -161,8 +183,14 @@ pub fn generate_filter_script(
     let mut diagnostics = Vec::new();
     let mut audio_labels = Vec::new();
     if supports_audio_output {
+        let output_range = output_timerange(plan);
+        let concat_audio_tracks = can_concat_audio_mixes(&plan.graph.audio_mixes, output_range);
+        let audio_alignment = if concat_audio_tracks {
+            AudioTimelineAlignment::TrackLocal
+        } else {
+            AudioTimelineAlignment::OutputTimeline
+        };
         for (audio_index, audio) in plan.graph.audio_mixes.iter().enumerate() {
-            let output_range = output_timerange(plan);
             let Some(clip) = clipped_audio_source_timerange(audio, output_range) else {
                 continue;
             };
@@ -171,28 +199,34 @@ pub fn generate_filter_script(
                 .get(&audio.material_id)
                 .ok_or_else(|| missing_input(&audio.material_id))?;
             let label = format!("a{audio_index}");
-            let compiled_audio = compile_audio_mix_filters(audio, &clip, output_range);
+            let compiled_audio =
+                compile_audio_mix_filters(audio, &clip, output_range, audio_alignment);
             lines.push(format!(
                 "[{input_index}:a]{}[{label}]",
                 compiled_audio.filters.join(",")
             ));
             diagnostics.extend(compiled_audio.diagnostics);
             diagnostics.extend(audio_effect_slot_diagnostics(audio));
-            audio_labels.push(label);
+            audio_labels.push(AudioLabel {
+                track_id: audio.track_id.as_str().to_owned(),
+                label,
+                active_start: target_delay_from_output(&audio.target_timerange, output_range),
+                active_end: Microseconds::new(
+                    target_delay_from_output(&audio.target_timerange, output_range)
+                        .get()
+                        .saturating_add(clip.duration.get()),
+                ),
+            });
         }
     }
     let has_audio_output = !audio_labels.is_empty();
-    if audio_labels.len() == 1 {
-        lines.push(format!("[{}]anull[aout]", audio_labels[0]));
-    } else if audio_labels.len() > 1 {
-        let inputs = audio_labels
-            .iter()
-            .map(|label| format!("[{label}]"))
-            .collect::<String>();
-        lines.push(format!(
-            "{inputs}amix=inputs={}:duration=longest:normalize=0[aout]",
-            audio_labels.len()
-        ));
+    if has_audio_output {
+        append_audio_output_filters(
+            &mut lines,
+            &audio_labels,
+            output_timerange(plan),
+            can_concat_audio_mixes(&plan.graph.audio_mixes, output_timerange(plan)),
+        );
     }
 
     Ok(GeneratedFilterScript {
@@ -203,10 +237,154 @@ pub fn generate_filter_script(
     })
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct AudioLabel {
+    track_id: String,
+    label: String,
+    active_start: Microseconds,
+    active_end: Microseconds,
+}
+
+fn append_audio_output_filters(
+    lines: &mut Vec<String>,
+    audio_labels: &[AudioLabel],
+    output: &TargetTimerange,
+    allow_track_concat: bool,
+) {
+    let mix_labels = audio_mix_labels(lines, audio_labels, output, allow_track_concat);
+    if mix_labels.len() == 1 {
+        lines.push(format!("[{}]anull[aout]", mix_labels[0]));
+    } else if mix_labels.len() > 1 {
+        let inputs = mix_labels
+            .iter()
+            .map(|label| format!("[{label}]"))
+            .collect::<String>();
+        lines.push(format!(
+            "{inputs}amix=inputs={}:duration=longest:normalize=0[aout]",
+            mix_labels.len()
+        ));
+    }
+}
+
+fn audio_mix_labels(
+    lines: &mut Vec<String>,
+    audio_labels: &[AudioLabel],
+    output: &TargetTimerange,
+    allow_track_concat: bool,
+) -> Vec<String> {
+    if !allow_track_concat {
+        return audio_labels
+            .iter()
+            .map(|label| label.label.clone())
+            .collect();
+    }
+
+    let mut by_track = BTreeMap::<String, Vec<&AudioLabel>>::new();
+    for label in audio_labels {
+        by_track
+            .entry(label.track_id.clone())
+            .or_default()
+            .push(label);
+    }
+
+    if by_track
+        .values()
+        .all(|labels| audio_track_can_concat(labels, output))
+    {
+        return by_track
+            .into_iter()
+            .enumerate()
+            .map(|(track_index, (_track_id, labels))| {
+                if labels.len() == 1 {
+                    return labels[0].label.clone();
+                }
+                let output_label = format!("atrack{track_index}");
+                let inputs = labels
+                    .iter()
+                    .map(|label| format!("[{}]", label.label))
+                    .collect::<String>();
+                lines.push(format!(
+                    "{inputs}concat=n={}:v=0:a=1[{output_label}]",
+                    labels.len()
+                ));
+                output_label
+            })
+            .collect();
+    }
+
+    audio_labels
+        .iter()
+        .map(|label| label.label.clone())
+        .collect()
+}
+
+fn can_concat_audio_mixes(audio_mixes: &[RenderAudioMix], output: &TargetTimerange) -> bool {
+    if audio_mixes.is_empty() {
+        return false;
+    }
+
+    let mut by_track = BTreeMap::<String, Vec<(Microseconds, Microseconds)>>::new();
+    for audio in audio_mixes {
+        if !is_unity_retime(&audio.retime)
+            || !audio.volume_keyframes.is_empty()
+            || audio.classification != render_graph::RenderAudioMixClassification::Audible
+        {
+            return false;
+        }
+        let Some(clip) = clipped_audio_source_timerange(audio, output) else {
+            continue;
+        };
+        let active_start = target_delay_from_output(&audio.target_timerange, output);
+        let active_end = Microseconds::new(active_start.get().saturating_add(clip.duration.get()));
+        by_track
+            .entry(audio.track_id.as_str().to_owned())
+            .or_default()
+            .push((active_start, active_end));
+    }
+
+    !by_track.is_empty()
+        && by_track.values().all(|ranges| {
+            let mut expected_start = Microseconds::ZERO;
+            let mut ordered = ranges.clone();
+            ordered.sort_by_key(|range| range.0);
+            for (active_start, active_end) in ordered {
+                if active_start != expected_start || active_end < active_start {
+                    return false;
+                }
+                expected_start = active_end;
+            }
+            expected_start == output.duration
+        })
+}
+
+fn is_unity_retime(retime: &render_graph::RenderRetimeIntent) -> bool {
+    matches!(
+        &retime.retiming.mode,
+        RetimeMode::Constant { speed } if speed.numerator == 1 && speed.denominator == 1
+    ) && retime.support == RenderIntentSupport::Supported
+}
+
+fn audio_track_can_concat(labels: &[&AudioLabel], output: &TargetTimerange) -> bool {
+    if labels.is_empty() {
+        return false;
+    }
+    let mut expected_start = Microseconds::ZERO;
+    let mut ordered = labels.to_vec();
+    ordered.sort_by_key(|label| label.active_start);
+    for label in ordered {
+        if label.active_start != expected_start || label.active_end < label.active_start {
+            return false;
+        }
+        expected_start = label.active_end;
+    }
+    expected_start == output.duration
+}
+
 fn compile_audio_mix_filters(
     audio: &RenderAudioMix,
     clip: &SourceTimerange,
     output: &TargetTimerange,
+    alignment: AudioTimelineAlignment,
 ) -> CompiledAudioMixFilters {
     let mut filters = vec![format!(
         "atrim=start={start}:duration={duration}",
@@ -215,7 +393,7 @@ fn compile_audio_mix_filters(
     )];
     filters.push("asetpts=PTS-STARTPTS".to_owned());
     let delay = target_delay_from_output(&audio.target_timerange, output);
-    if delay.get() > 0 {
+    if alignment == AudioTimelineAlignment::OutputTimeline && delay.get() > 0 {
         filters.push(format!(
             "adelay={delay}|{delay}",
             delay = delay_millis(delay)
@@ -336,17 +514,25 @@ fn compile_visual_layer(
     source_dimensions: LayerDimensions,
     output_dimensions: LayerDimensions,
     plan: &RenderGraphPlan,
+    alignment: LayerTimelineAlignment,
 ) -> VisualLayerFilter {
     let label = format!("v{layer_index}");
     let active_start = target_delay_from_output(&layer.target_timerange, output_timerange(plan));
     let active_end = Microseconds::new(active_start.get().saturating_add(clip.duration.get()));
+    let defer_visual_fit = alignment == LayerTimelineAlignment::SegmentLocal;
+    let filter_target_delay = match alignment {
+        LayerTimelineAlignment::OutputTimeline => active_start,
+        LayerTimelineAlignment::SegmentLocal => Microseconds::ZERO,
+    };
     if is_full_canvas_identity(&layer.visual) {
-        let mut filters = visual_source_filters(layer, clip, active_start, plan);
-        filters.push(format!(
-            "scale={width}:{height}",
-            width = output_dimensions.width,
-            height = output_dimensions.height
-        ));
+        let mut filters = visual_source_filters(layer, clip, filter_target_delay, plan);
+        if source_dimensions != output_dimensions {
+            filters.push(format!(
+                "scale={width}:{height}",
+                width = output_dimensions.width,
+                height = output_dimensions.height
+            ));
+        }
         filters.extend(compile_production_effect_filters(&layer.filters));
         filters.extend(compile_phase19_mask_alpha_filters(
             &layer.mask,
@@ -357,6 +543,7 @@ fn compile_visual_layer(
             segment_id: layer.segment_id.clone(),
             label: label.clone(),
             transition: layer.transition.clone(),
+            dimensions: output_dimensions,
             placement: LayerPlacement { x: 0, y: 0 },
             active_start,
             active_end,
@@ -364,14 +551,22 @@ fn compile_visual_layer(
         };
     }
 
-    let cropped_dimensions = cropped_dimensions(source_dimensions, &layer.visual.transform.crop);
-    let (fit_filters, mut current_dimensions) = fit_mode_filters(
-        &layer.visual.fit_mode,
-        cropped_dimensions,
-        output_dimensions,
-    );
-    let mut source_filters = visual_source_filters(layer, clip, active_start, plan);
-    if crop_is_active(&layer.visual.transform.crop) {
+    let cropped_dimensions = if defer_visual_fit {
+        source_dimensions
+    } else {
+        cropped_dimensions(source_dimensions, &layer.visual.transform.crop)
+    };
+    let (fit_filters, mut current_dimensions) = if defer_visual_fit {
+        (Vec::new(), source_dimensions)
+    } else {
+        fit_mode_filters(
+            &layer.visual.fit_mode,
+            cropped_dimensions,
+            output_dimensions,
+        )
+    };
+    let mut source_filters = visual_source_filters(layer, clip, filter_target_delay, plan);
+    if !defer_visual_fit && crop_is_active(&layer.visual.transform.crop) {
         let left = millis_of(
             source_dimensions.width,
             layer.visual.transform.crop.left_millis,
@@ -481,6 +676,7 @@ fn compile_visual_layer(
         segment_id: layer.segment_id.clone(),
         label,
         transition: layer.transition.clone(),
+        dimensions: rotated_dimensions,
         placement: layer_placement(&layer.visual, output_dimensions, rotated_dimensions),
         active_start,
         active_end,
@@ -551,6 +747,7 @@ fn append_transition_filters(
             segment_id: spec.transition.from_segment_id.clone(),
             label: spec.output_label,
             transition: None,
+            dimensions: spec.dimensions,
             placement: spec.placement,
             active_start: spec.active_start,
             active_end: spec.active_end,
@@ -573,6 +770,7 @@ struct TransitionFilterSpec {
     output_label: String,
     transition: RenderTransitionIntent,
     offset: Microseconds,
+    dimensions: LayerDimensions,
     placement: LayerPlacement,
     active_start: Microseconds,
     active_end: Microseconds,
@@ -593,6 +791,9 @@ fn layer_transition_spec(
     let to_index = visual_layers
         .iter()
         .position(|candidate| candidate.segment_id == transition.to_segment_id)?;
+    if from_index == to_index {
+        return None;
+    }
     let active_start = target_delay_from_output(&transition.window.target_timerange, output);
     let active_end = Microseconds::new(
         active_start
@@ -616,6 +817,7 @@ fn layer_transition_spec(
         output_label: transition_output_label(transition),
         transition: transition.clone(),
         offset,
+        dimensions: visual_layers[from_index].dimensions,
         placement: visual_layers[from_index].placement,
         active_start,
         active_end,
@@ -683,6 +885,185 @@ fn compose_placed_visual_layers(
         current = out;
     }
     current
+}
+
+fn compose_concatenated_visual_layers(
+    lines: &mut Vec<String>,
+    layers: &[VisualLayerFilter],
+    post_filters: &[String],
+) -> String {
+    let output = "vconcat0".to_owned();
+    if layers.len() == 1 {
+        return apply_post_concat_visual_filters(lines, &layers[0].label, &output, post_filters);
+    }
+
+    let concat_output = if post_filters.is_empty() {
+        output.clone()
+    } else {
+        "vconcatraw0".to_owned()
+    };
+    let inputs = layers
+        .iter()
+        .map(|layer| format!("[{}]", layer.label))
+        .collect::<String>();
+    lines.push(format!(
+        "{inputs}concat=n={}:v=1:a=0[{concat_output}]",
+        layers.len()
+    ));
+    apply_post_concat_visual_filters(lines, &concat_output, &output, post_filters)
+}
+
+fn apply_post_concat_visual_filters(
+    lines: &mut Vec<String>,
+    input: &str,
+    output: &str,
+    post_filters: &[String],
+) -> String {
+    if post_filters.is_empty() {
+        return input.to_owned();
+    }
+    lines.push(format!("[{input}]{}[{output}]", post_filters.join(",")));
+    output.to_owned()
+}
+
+fn concat_visual_post_filters(
+    plan: &RenderGraphPlan,
+    output_dimensions: LayerDimensions,
+    material_dimensions: &BTreeMap<MaterialId, LayerDimensions>,
+) -> Option<Vec<String>> {
+    let layers = &plan.graph.video_layers;
+    let Some(first_layer) = layers.first() else {
+        return None;
+    };
+    let output = output_timerange(plan);
+    let stack_index = first_layer.stack_index;
+    let mut ranges = Vec::new();
+    let mut shared_post_filters = None::<Vec<String>>;
+
+    for layer in layers {
+        if layer.stack_index != stack_index
+            || layer.transition.is_some()
+            || !layer.keyframes.is_empty()
+            || !is_unity_retime(&layer.retime)
+            || !visual_layer_renders_full_canvas(layer, output_dimensions, material_dimensions)
+        {
+            return None;
+        }
+        let Some((active_start, active_end)) = active_target_range(&layer.target_timerange, output)
+        else {
+            continue;
+        };
+        ranges.push((active_start, active_end));
+
+        let source_dimensions = material_dimensions
+            .get(&layer.material_id)
+            .copied()
+            .unwrap_or(output_dimensions);
+        let post_filters = deferred_full_canvas_fit_filters(
+            &layer.visual.fit_mode,
+            source_dimensions,
+            output_dimensions,
+        );
+        match &shared_post_filters {
+            Some(shared) if shared != &post_filters => return None,
+            Some(_) => {}
+            None => shared_post_filters = Some(post_filters),
+        }
+    }
+
+    if ranges_cover_output_contiguously(&ranges, output.duration) {
+        shared_post_filters
+    } else {
+        None
+    }
+}
+
+fn deferred_full_canvas_fit_filters(
+    fit_mode: &SegmentFitMode,
+    source_dimensions: LayerDimensions,
+    output_dimensions: LayerDimensions,
+) -> Vec<String> {
+    let (mut filters, _dimensions) =
+        fit_mode_filters(fit_mode, source_dimensions, output_dimensions);
+    if filters.is_empty() {
+        filters.push(format!(
+            "scale={}:{}",
+            output_dimensions.width, output_dimensions.height
+        ));
+    }
+    filters
+}
+
+fn visual_layer_renders_full_canvas(
+    layer: &RenderVideoLayer,
+    output_dimensions: LayerDimensions,
+    material_dimensions: &BTreeMap<MaterialId, LayerDimensions>,
+) -> bool {
+    if !layer.visual.visible
+        || !layer.filters.is_empty()
+        || !matches!(layer.mask.mask, SegmentMask::None)
+        || layer.blend.blend_mode != SegmentBlendMode::Normal
+        || layer.visual.blend_mode != SegmentBlendMode::Normal
+        || !matches!(layer.visual.mask, SegmentMask::None)
+        || layer.visual.transform.scale.x_millis != 1_000
+        || layer.visual.transform.scale.y_millis != 1_000
+        || layer.visual.transform.position.x != 0
+        || layer.visual.transform.position.y != 0
+        || layer.visual.transform.anchor.x_millis != 500
+        || layer.visual.transform.anchor.y_millis != 500
+        || layer.visual.transform.rotation.degrees.rem_euclid(360) != 0
+        || layer.visual.transform.opacity.value_millis != 1_000
+        || crop_is_active(&layer.visual.transform.crop)
+    {
+        return false;
+    }
+
+    let source_dimensions = material_dimensions
+        .get(&layer.material_id)
+        .copied()
+        .unwrap_or(output_dimensions);
+    let (_fit_filters, fitted_dimensions) =
+        fit_mode_filters(&layer.visual.fit_mode, source_dimensions, output_dimensions);
+    let placement = layer_placement(&layer.visual, output_dimensions, fitted_dimensions);
+    fitted_dimensions == output_dimensions && placement.x == 0 && placement.y == 0
+}
+
+fn active_target_range(
+    target: &TargetTimerange,
+    output: &TargetTimerange,
+) -> Option<(Microseconds, Microseconds)> {
+    let target_start = target.start.get();
+    let target_end = target_start.checked_add(target.duration.get())?;
+    let output_start = output.start.get();
+    let output_end = output_start.checked_add(output.duration.get())?;
+    let active_start = target_start.max(output_start);
+    let active_end = target_end.min(output_end);
+    if active_start >= active_end {
+        return None;
+    }
+    Some((
+        Microseconds::new(active_start.saturating_sub(output_start)),
+        Microseconds::new(active_end.saturating_sub(output_start)),
+    ))
+}
+
+fn ranges_cover_output_contiguously(
+    ranges: &[(Microseconds, Microseconds)],
+    output_duration: Microseconds,
+) -> bool {
+    if ranges.is_empty() {
+        return false;
+    }
+    let mut ordered = ranges.to_vec();
+    ordered.sort_by_key(|range| range.0);
+    let mut expected_start = Microseconds::ZERO;
+    for (active_start, active_end) in ordered {
+        if active_start != expected_start || active_end < active_start {
+            return false;
+        }
+        expected_start = active_end;
+    }
+    expected_start == output_duration
 }
 
 fn missing_input(material_id: &MaterialId) -> FfmpegCompileError {
@@ -766,28 +1147,35 @@ fn fit_mode_filters(
     output: LayerDimensions,
 ) -> (Vec<String>, LayerDimensions) {
     match fit_mode {
-        SegmentFitMode::Stretch => (
-            vec![format!("scale={}:{}", output.width, output.height)],
-            output,
-        ),
+        SegmentFitMode::Stretch => {
+            let filters = if source == output {
+                Vec::new()
+            } else {
+                vec![format!("scale={}:{}", output.width, output.height)]
+            };
+            (filters, output)
+        }
         SegmentFitMode::Fit => {
             let fitted = fit_dimensions(source, output);
-            (
-                vec![format!("scale={}:{}", fitted.width, fitted.height)],
-                fitted,
-            )
+            let filters = if fitted == source {
+                Vec::new()
+            } else {
+                vec![format!("scale={}:{}", fitted.width, fitted.height)]
+            };
+            (filters, fitted)
         }
         SegmentFitMode::Fill => {
             let filled = fill_dimensions(source, output);
             let x = ((i64::from(filled.width) - i64::from(output.width)) / 2).max(0);
             let y = ((i64::from(filled.height) - i64::from(output.height)) / 2).max(0);
-            (
-                vec![
-                    format!("scale={}:{}", filled.width, filled.height),
-                    format!("crop={}:{}:{x}:{y}", output.width, output.height),
-                ],
-                output,
-            )
+            let mut filters = Vec::new();
+            if filled != source {
+                filters.push(format!("scale={}:{}", filled.width, filled.height));
+            }
+            if filled != output || x != 0 || y != 0 {
+                filters.push(format!("crop={}:{}:{x}:{y}", output.width, output.height));
+            }
+            (filters, output)
         }
     }
 }

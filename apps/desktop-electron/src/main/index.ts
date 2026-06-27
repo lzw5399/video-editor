@@ -174,6 +174,8 @@ type TestProjectSessionCall = {
   revisionUnchanged: boolean | null;
   acceptedSequence: number | null;
   coalescedThrough: number | null;
+  resultExportJobId: string | null;
+  resultExportPhase: string | null;
 };
 
 type TestWindowMetrics = {
@@ -335,12 +337,15 @@ ipcMain.handle("core:listProjectSessionMissingMaterials", (event, request: Proje
 });
 ipcMain.handle("core:startProjectSessionExport", (event, request: StartProjectSessionExportRequest) => {
   assertAllowedIpcSender(event);
-  recordTestProjectSessionCall("startProjectSessionExport", request);
+  const observationIndex = recordTestProjectSessionCall("startProjectSessionExport", request);
   const testExportResponse = maybeBuildTestProjectSessionExportResponse(request);
   if (testExportResponse !== null) {
+    recordTestProjectSessionResult(observationIndex, testExportResponse);
     return testExportResponse;
   }
-  return startProjectSessionExport(request);
+  const result = startProjectSessionExport(request);
+  recordTestProjectSessionResult(observationIndex, result);
+  return result;
 });
 ipcMain.handle("core:getExportJobStatus", (event, request: ExportJobRequest) => {
   assertAllowedIpcSender(event);
@@ -1260,7 +1265,9 @@ function recordTestProjectSessionCall(
     resultDeltaConsumerDomains: [],
     revisionUnchanged: null,
     acceptedSequence: null,
-    coalescedThrough: null
+    coalescedThrough: null,
+    resultExportJobId: null,
+    resultExportPhase: null
   };
   globalThis.__videoEditorTestProjectSessionCalls.push(observation);
   return globalThis.__videoEditorTestProjectSessionCalls.length - 1;
@@ -1290,6 +1297,8 @@ function recordTestProjectSessionResult(index: number | null, result: CommandRes
   observation.coalescedThrough = projectSessionResultNumber(result.data, "coalescedThrough");
   observation.interactionId = observation.interactionId ?? projectSessionResultString(result.data, "interactionId");
   observation.interactionKind = observation.interactionKind ?? projectSessionResultString(result.data, "kind");
+  observation.resultExportJobId = projectSessionResultString(result.data, "jobId");
+  observation.resultExportPhase = projectSessionResultString(result.data, "phase");
 }
 
 function projectSessionResultBoolean(data: unknown, key: string): boolean | null {

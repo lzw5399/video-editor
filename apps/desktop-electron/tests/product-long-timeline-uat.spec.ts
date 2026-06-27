@@ -8,6 +8,7 @@ import {
   expectPhase20ExportMedia,
   expectPhase20PreviewProductionEvidence,
   readCanonicalDraftSummary,
+  type Phase20ExportMediaEvidence,
   writePhase20EvidenceSummary
 } from "./helpers/longTimelineEvidence";
 import { launchPackagedApp, type PackagedAppLaunch } from "./helpers/packagedApp";
@@ -55,6 +56,22 @@ type Phase20PackagedLaunch = {
   page: Page;
   executablePath: string;
   rawApp: ElectronApplication;
+};
+
+type Phase20ExportPressure = {
+  outputPath: string;
+  jobId: string;
+  activeStatusSamples: string[];
+};
+
+type Phase20ExportJobStatus = {
+  jobId: string;
+  phase: "queued" | "running" | "validating" | "completed" | "cancelled" | "failed" | "validationFailed";
+  outputPath: string;
+  progressPerMille?: number | null;
+  logSummary?: string | null;
+  diagnostic?: { kind?: string; message?: string } | null;
+  validation?: unknown;
 };
 
 test("Phase 20 packaged responsiveness UAT @phase20 @responsiveness", async () => {
@@ -230,7 +247,9 @@ test("Phase 20 packaged scheduler pressure UAT @phase20 @pressure", async () => 
         nativeCommandObservations: result.nativeCommandObservations,
         projectSessionCalls: result.projectSessionCalls,
         realtimePreviewHostCalls: result.realtimePreviewHostCalls,
-        previewEvidence: result.previewEvidence
+        previewEvidence: result.previewEvidence,
+        pressureExport: result.pressureExport,
+        pressureActiveStatusSamples: result.pressureActiveStatusSamples
       }
     });
   } catch (error) {
@@ -352,6 +371,8 @@ async function runSchedulerPressureWorkflow(
   projectSessionCalls: Awaited<ReturnType<typeof readProjectSessionCalls>>;
   realtimePreviewHostCalls: Awaited<ReturnType<typeof readRealtimePreviewHostCalls>>;
   previewEvidence: Record<string, unknown>;
+  pressureExport: Phase20ExportMediaEvidence;
+  pressureActiveStatusSamples: string[];
 }> {
   await expectLongProjectVisible(page);
   await zoomTimelineTo(page, 200);
@@ -363,6 +384,10 @@ async function runSchedulerPressureWorkflow(
   const visibleBeforePlay = await captureVisiblePreviewEvidence(page, app);
   const telemetryBeforePressure = await readTaskRuntimeTelemetry(page);
 
+  const pressureExport = await startPhase20ExportPressureThroughProductUi(page, app, fixtures.firstExportPath);
+  const telemetryAfterPressure = await waitForSchedulerTelemetryProgress(page, telemetryBeforePressure);
+
+  await assertPhase20PressureExportActive(page, pressureExport, "before pressure playback");
   await activateProductJourneyApp(app, page);
   await clickPreviewPlay(page);
   const playbackEvidence = await waitForProductPlaybackSuccess(
@@ -373,18 +398,18 @@ async function runSchedulerPressureWorkflow(
     frameRequestsBeforePlay,
     20_000
   );
-
-  await startPhase20ExportPressureThroughProductUi(page, app, fixtures.firstExportPath);
-  const telemetryAfterPressure = await waitForSchedulerTelemetryProgress(page, telemetryBeforePressure);
+  await assertPhase20PressureExportActive(page, pressureExport, "after pressure playback");
 
   const metrics: Record<string, number | string | boolean> = {};
   const scrubBefore = await captureVisiblePreviewEvidence(page, app);
   const frameRequestsBeforeScrub = requestProjectSessionPreviewFrameCount(await readNativeCommandObservations(app));
+  await assertPhase20PressureExportActive(page, pressureExport, "before pressure scrub");
   metrics.scrubMs = await expectWithinBudget("pressure scrub visible feedback", RESPONSIVE_FEEDBACK_BUDGET_MS, async () => {
     await seekTimelinePlayhead(page, app, 75_000_000);
   });
   await waitForVisiblePreviewCenterChange(page, app, scrubBefore.visibleCenterHash, 8_000);
   await waitForCompositedPreviewEvidence(page, app, 20_000, scrubBefore.hostState?.contentEvidence?.targetTimeMicroseconds ?? -1);
+  await assertPhase20PressureExportActive(page, pressureExport, "after pressure scrub");
   const scrubAfter = await captureVisiblePreviewEvidence(page, app);
   expectPhase20PreviewProductionEvidence({
     before: scrubBefore,
@@ -394,17 +419,23 @@ async function runSchedulerPressureWorkflow(
   });
 
   await selectLongVideoSegment(page, SPLIT_VIDEO_SEGMENT_LABEL);
+  await assertPhase20PressureExportActive(page, pressureExport, "before pressure inspector visual edit");
   metrics.inspectorEditMs = await expectWithinBudget("pressure inspector visual edit", INSPECTOR_EDIT_BUDGET_MS, async () => {
     await editSelectedVisualPositionXThroughInspector(page, app, 156);
   });
+  await assertPhase20PressureExportActive(page, pressureExport, "after pressure inspector visual edit");
 
+  await assertPhase20PressureExportActive(page, pressureExport, "before pressure interaction commit");
   metrics.commitMs = await expectWithinBudget("pressure interaction commit", EDIT_OPERATION_BUDGET_MS, async () => {
     await moveSelectedSegmentRightForLongTimeline(page, app);
   });
+  await assertPhase20PressureExportActive(page, pressureExport, "after pressure interaction commit");
 
+  await assertPhase20PressureExportActive(page, pressureExport, "before pressure interaction cancel");
   metrics.cancelMs = await expectWithinBudget("pressure interaction cancel", EDIT_OPERATION_BUDGET_MS, async () => {
     await cancelSelectedSegmentMoveForLongTimeline(page, app);
   });
+  await assertPhase20PressureExportActive(page, pressureExport, "after pressure interaction cancel");
 
   const telemetryAfterInteractions = await readTaskRuntimeTelemetry(page);
   const nativeCommandObservations = await readNativeCommandObservations(app);
@@ -451,6 +482,8 @@ async function runSchedulerPressureWorkflow(
   metrics.staleRejectedCount = telemetryAfterInteractions.staleRejectedCount;
   metrics.submittedDelta = telemetryAfterInteractions.submittedCount - telemetryBeforePressure.submittedCount;
   metrics.pressureSubmittedDelta = telemetryAfterPressure.submittedCount - telemetryBeforePressure.submittedCount;
+  metrics.pressureExportActiveChecks = pressureExport.activeStatusSamples.length;
+  const pressureExportEvidence = await completeAndValidatePhase20PressureExport(page, pressureExport, fixtures);
 
   return {
     metrics,
@@ -458,6 +491,8 @@ async function runSchedulerPressureWorkflow(
     nativeCommandObservations,
     projectSessionCalls,
     realtimePreviewHostCalls,
+    pressureExport: pressureExportEvidence,
+    pressureActiveStatusSamples: pressureExport.activeStatusSamples,
     previewEvidence: {
       beforePlay: previewBeforePlay,
       playbackAfter: playbackEvidence.after,
@@ -495,9 +530,7 @@ async function exportPhase20MediaThroughProductUi(
   outputPath: string
 ): Promise<void> {
   const nextStartCount = countNativeCommand(await readNativeCommandObservations(app), "startExport") + 1;
-  await page.getByLabel("产品操作").getByRole("button", { name: "导出", exact: true }).click();
-  const dialog = page.getByRole("dialog", { name: "导出" });
-  await expect(dialog).toBeVisible();
+  const dialog = await openPhase20ExportDialog(page);
   await dialog.getByLabel("输出路径").fill(outputPath);
   await expect(dialog.getByRole("button", { name: "开始导出" })).toBeEnabled({ timeout: 20_000 });
   await dialog.getByRole("button", { name: "开始导出" }).click();
@@ -505,28 +538,172 @@ async function exportPhase20MediaThroughProductUi(
     .poll(async () => countNativeCommand(await readNativeCommandObservations(app), "startExport"), { timeout: 30_000 })
     .toBeGreaterThanOrEqual(nextStartCount);
   await waitForPhase20ExportCompletion(page, app, dialog);
-  await dialog.getByRole("button", { name: "关闭" }).click();
-  await expect(dialog).toHaveCount(0);
+  await closePhase20ExportDialog(dialog);
 }
 
 async function startPhase20ExportPressureThroughProductUi(
   page: Page,
   app: ProductJourneyAppController,
   outputPath: string
-): Promise<void> {
+): Promise<Phase20ExportPressure> {
   const nextStartCount = countNativeCommand(await readNativeCommandObservations(app), "startExport") + 1;
-  await page.getByLabel("产品操作").getByRole("button", { name: "导出", exact: true }).click();
-  const dialog = page.getByRole("dialog", { name: "导出" });
-  await expect(dialog).toBeVisible();
+  const dialog = await openPhase20ExportDialog(page);
   await dialog.getByLabel("输出路径").fill(outputPath);
   await expect(dialog.getByRole("button", { name: "开始导出" })).toBeEnabled({ timeout: 20_000 });
   await dialog.getByRole("button", { name: "开始导出" }).click();
   await expect
     .poll(async () => countNativeCommand(await readNativeCommandObservations(app), "startExport"), { timeout: 30_000 })
     .toBeGreaterThanOrEqual(nextStartCount);
-  await expect(dialog.getByLabel("导出进度")).toContainText(/排队中|导出中|校验中|已完成/, { timeout: 20_000 });
+  const jobId = await waitForStartedPhase20ExportJobId(app, outputPath);
+  const pressureExport: Phase20ExportPressure = {
+    outputPath,
+    jobId,
+    activeStatusSamples: []
+  };
+  await closePhase20ExportDialog(dialog);
+  await waitForPhase20ExportActive(page, pressureExport, "after export start");
+  await seekTimelinePlayhead(page, app, 0);
+  await waitForCompositedPreviewEvidence(page, app, 20_000, -1);
+  return pressureExport;
+}
+
+async function waitForStartedPhase20ExportJobId(app: ProductJourneyAppController, outputPath: string): Promise<string> {
+  let jobId = "";
+  await expect
+    .poll(
+      async () => {
+        const calls = await readProjectSessionCalls(app);
+        const exportCall = [...calls]
+          .reverse()
+          .find(
+            (call) =>
+              call.command === "startProjectSessionExport" &&
+              call.outputPath === outputPath &&
+              call.resultOk === true &&
+              typeof call.resultExportJobId === "string" &&
+              call.resultExportJobId.length > 0
+          );
+        jobId = exportCall?.resultExportJobId ?? "";
+        return jobId;
+      },
+      { timeout: 30_000 }
+    )
+    .not.toBe("");
+  return jobId;
+}
+
+async function assertPhase20PressureExportActive(
+  page: Page,
+  pressureExport: Phase20ExportPressure,
+  label: string
+): Promise<void> {
+  await waitForPhase20ExportActive(page, pressureExport, label);
+}
+
+async function completeAndValidatePhase20PressureExport(
+  page: Page,
+  pressureExport: Phase20ExportPressure,
+  fixtures: Phase20LongTimelineFixtures
+): Promise<Phase20ExportMediaEvidence> {
+  await waitForPhase20PressureExportCompletion(page, pressureExport);
+  return expectPhase20ExportMedia(page, {
+    outputPath: pressureExport.outputPath,
+    expectedWidth: fixtures.expectedWidth,
+    expectedHeight: fixtures.expectedHeight,
+    expectedFrameRate: fixtures.expectedFrameRate,
+    expectedDurationSeconds: fixtures.expectedDurationSeconds,
+    expectedDurationToleranceSeconds: 1.0,
+    sampleTimesSeconds: [0.5, fixtures.expectedDurationSeconds / 2, fixtures.expectedDurationSeconds - 0.5],
+    editPointSeconds: [1, 2.5, 75],
+    minDistinctSampleHashes: 2,
+    evidenceDir: fixtures.evidenceDir
+  });
+}
+
+async function openPhase20ExportDialog(page: Page): Promise<Locator> {
+  const dialog = page.getByRole("dialog", { name: "导出" });
+  if ((await dialog.count()) === 0) {
+    await page.getByLabel("产品操作").getByRole("button", { name: "导出", exact: true }).click();
+  }
+  await expect(dialog).toBeVisible();
+  return dialog;
+}
+
+async function closePhase20ExportDialog(dialog: Locator): Promise<void> {
   await dialog.getByRole("button", { name: "关闭" }).click();
   await expect(dialog).toHaveCount(0);
+}
+
+async function waitForPhase20ExportActive(page: Page, pressureExport: Phase20ExportPressure, label: string): Promise<void> {
+  const deadline = Date.now() + 20_000;
+  while (Date.now() < deadline) {
+    const status = await readPhase20ExportJobStatus(page, pressureExport.jobId);
+    if (phase20ExportStatusFailed(status)) {
+      throw new Error(`Phase 20 pressure export failed during ${label}: ${formatPhase20ExportStatus(status)}`);
+    }
+    if (status.phase === "completed") {
+      throw new Error(`Phase 20 pressure export completed before active-pressure check ${label}: ${formatPhase20ExportStatus(status)}`);
+    }
+    if (status.phase === "queued" || status.phase === "running" || status.phase === "validating") {
+      pressureExport.activeStatusSamples.push(`${label}: ${formatPhase20ExportStatus(status)}`);
+      return;
+    }
+    await page.waitForTimeout(300);
+  }
+  throw new Error(
+    `Phase 20 pressure export never became active during ${label}: ${formatPhase20ExportStatus(
+      await readPhase20ExportJobStatus(page, pressureExport.jobId)
+    )}`
+  );
+}
+
+async function waitForPhase20PressureExportCompletion(page: Page, pressureExport: Phase20ExportPressure): Promise<Phase20ExportJobStatus> {
+  const deadline = Date.now() + 180_000;
+  while (Date.now() < deadline) {
+    const status = await readPhase20ExportJobStatus(page, pressureExport.jobId);
+    if (phase20ExportStatusFailed(status)) {
+      throw new Error(`Phase 20 pressure export failed before media validation: ${formatPhase20ExportStatus(status)}`);
+    }
+    if (status.phase === "completed") {
+      pressureExport.activeStatusSamples.push(`completed: ${formatPhase20ExportStatus(status)}`);
+      return status;
+    }
+    await page.waitForTimeout(750);
+  }
+  throw new Error(
+    `Phase 20 pressure export did not complete before timeout: ${formatPhase20ExportStatus(
+      await readPhase20ExportJobStatus(page, pressureExport.jobId)
+    )}`
+  );
+}
+
+async function readPhase20ExportJobStatus(page: Page, jobId: string): Promise<Phase20ExportJobStatus> {
+  const result = await page.evaluate(async (exportJobId) => {
+    type CommandResultEnvelope<T> = {
+      ok: boolean;
+      data: T | null;
+      error: { message?: string } | null;
+    };
+    type ExportJobStatus = {
+      jobId: string;
+      phase: string;
+      outputPath: string;
+      progressPerMille?: number | null;
+      logSummary?: string | null;
+      diagnostic?: { kind?: string; message?: string } | null;
+      validation?: unknown;
+    };
+    const api = (window as typeof window & {
+      videoEditorCore?: {
+        getExportJobStatus: (request: { jobId: string }) => Promise<CommandResultEnvelope<ExportJobStatus>>;
+      };
+    }).videoEditorCore;
+    return api?.getExportJobStatus({ jobId: exportJobId });
+  }, jobId);
+
+  expect(result?.ok, `getExportJobStatus failed for Phase 20 pressure export: ${JSON.stringify(result?.error ?? null)}`).toBe(true);
+  expect(result?.data, "getExportJobStatus must return Phase 20 pressure export status").not.toBeNull();
+  return result.data as Phase20ExportJobStatus;
 }
 
 async function waitForSchedulerTelemetryProgress(
@@ -551,50 +728,91 @@ async function waitForPhase20ExportCompletion(
   app: ProductJourneyAppController,
   dialog: Locator
 ): Promise<void> {
-  const statusButton = dialog.getByRole("button", { name: "查询导出状态" });
   const deadline = Date.now() + 180_000;
 
   while (Date.now() < deadline) {
-    const progressText = (await dialog.getByLabel("导出进度").textContent()) ?? "";
-    const logText = (await dialog.getByLabel("导出状态", { exact: true }).textContent()) ?? "";
-    const validationText = (await dialog.getByLabel("输出校验").textContent()) ?? "";
-    if (progressText.includes("失败") || logText.includes("失败") || validationText.includes("失败")) {
+    const texts = await readPhase20ExportTexts(dialog);
+    if (phase20ExportTextFailed(texts)) {
       throw new Error(
         [
-          `Phase 20 export failed: ${progressText}`,
-          `Export log: ${logText}`,
-          `Export validation: ${validationText}`,
+          `Phase 20 export failed: ${texts.progressText}`,
+          `Export log: ${texts.logText}`,
+          `Export validation: ${texts.validationText}`,
           `Recorded commands: ${JSON.stringify(await readNativeCommandObservations(app))}`
         ].join("\n")
       );
     }
-    if (progressText.includes("已完成")) {
+    if (texts.progressText.includes("已完成")) {
       await expect(dialog.getByLabel("导出进度")).toContainText("已完成", { timeout: 5_000 });
       return;
     }
 
-    if (await statusButton.isEnabled().catch(() => false)) {
-      const nextStatusCount = countNativeCommand(await readNativeCommandObservations(app), "getExportJobStatus") + 1;
-      await statusButton.click();
-      await expect
-        .poll(async () => countNativeCommand(await readNativeCommandObservations(app), "getExportJobStatus"), { timeout: 20_000 })
-        .toBeGreaterThanOrEqual(nextStatusCount);
-    }
-
+    await refreshPhase20ExportStatusIfPossible(page, app, dialog);
     await page.waitForTimeout(750);
   }
 
-  const progressText = (await dialog.getByLabel("导出进度").textContent()) ?? "";
-  const logText = (await dialog.getByLabel("导出状态", { exact: true }).textContent()) ?? "";
-  const validationText = (await dialog.getByLabel("输出校验").textContent()) ?? "";
+  const texts = await readPhase20ExportTexts(dialog);
   throw new Error(
     [
-      `Phase 20 export did not complete before timeout: ${progressText}`,
-      `Export log: ${logText}`,
-      `Export validation: ${validationText}`,
+      `Phase 20 export did not complete before timeout: ${texts.progressText}`,
+      `Export log: ${texts.logText}`,
+      `Export validation: ${texts.validationText}`,
       `Recorded commands: ${JSON.stringify(await readNativeCommandObservations(app))}`
     ].join("\n")
   );
+}
+
+async function refreshPhase20ExportStatusIfPossible(page: Page, app: ProductJourneyAppController, dialog: Locator): Promise<void> {
+  const statusButton = dialog.getByRole("button", { name: "查询导出状态" });
+  if (await statusButton.isEnabled().catch(() => false)) {
+    const nextStatusCount = countNativeCommand(await readNativeCommandObservations(app), "getExportJobStatus") + 1;
+    await statusButton.click();
+    await expect
+      .poll(async () => countNativeCommand(await readNativeCommandObservations(app), "getExportJobStatus"), { timeout: 20_000 })
+      .toBeGreaterThanOrEqual(nextStatusCount);
+  } else {
+    await page.waitForTimeout(100);
+  }
+}
+
+async function readPhase20ExportTexts(dialog: Locator): Promise<{
+  progressText: string;
+  logText: string;
+  validationText: string;
+}> {
+  const [progressText, logText, validationText] = await Promise.all([
+    dialog.getByLabel("导出进度").textContent(),
+    dialog.getByLabel("导出状态", { exact: true }).textContent(),
+    dialog.getByLabel("输出校验").textContent()
+  ]);
+  return {
+    progressText: progressText ?? "",
+    logText: logText ?? "",
+    validationText: validationText ?? ""
+  };
+}
+
+function phase20ExportTextFailed(texts: { progressText: string; logText: string; validationText: string }): boolean {
+  return texts.progressText.includes("失败") || texts.logText.includes("失败") || texts.validationText.includes("失败");
+}
+
+function formatPhase20ExportTexts(texts: { progressText: string; logText: string; validationText: string }): string {
+  return `progress=${texts.progressText}; log=${texts.logText}; validation=${texts.validationText}`;
+}
+
+function phase20ExportStatusFailed(status: Phase20ExportJobStatus): boolean {
+  return status.phase === "failed" || status.phase === "validationFailed" || status.phase === "cancelled";
+}
+
+function formatPhase20ExportStatus(status: Phase20ExportJobStatus): string {
+  return [
+    `jobId=${status.jobId}`,
+    `phase=${status.phase}`,
+    `progress=${status.progressPerMille ?? "n/a"}`,
+    `outputPath=${status.outputPath}`,
+    `log=${status.logSummary ?? ""}`,
+    `diagnostic=${JSON.stringify(status.diagnostic ?? null)}`
+  ].join("; ");
 }
 
 async function launchPhase20PackagedProject(

@@ -50,6 +50,7 @@ type NativeCommandObservation = {
   targetTrackHandle?: string | null;
   outputPath?: string | null;
   preset?: string | null;
+  jobId?: string | null;
   sessionId?: string | null;
   projectSessionId?: string | null;
   expectedRevision?: number | null;
@@ -119,6 +120,8 @@ type ProjectSessionCall = {
   revisionUnchanged?: boolean | null;
   acceptedSequence?: number | null;
   coalescedThrough?: number | null;
+  resultExportJobId?: string | null;
+  resultExportPhase?: string | null;
 };
 
 type RealtimePreviewHostCall = {
@@ -1555,6 +1558,7 @@ function projectSessionCallToNativeObservation(call: ProjectSessionCall): Native
     targetTrackHandle: call.targetTrackHandle ?? null,
     outputPath: call.outputPath ?? null,
     preset: call.preset ?? null,
+    jobId: call.resultExportJobId ?? null,
     sessionId: call.sessionId,
     projectSessionId: call.sessionId,
     expectedRevision: call.expectedRevision,

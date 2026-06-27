@@ -14,15 +14,15 @@ require_file() {
 require_fixed() {
   local file="$1"
   local text="$2"
-  if ! rg -n --fixed-strings "$text" "$file" >/dev/null; then
+  if [ -z "$(matches_for_fixed_text "$file" "$text")" ]; then
     fail "missing required text '${text}' in ${file}"
   fi
 }
 
 strip_comments() {
-  rg -v '^[^:]+:[0-9]+:[[:space:]]*(//|/\*|\*|#)' \
-    | rg -v '^[0-9]+:[[:space:]]*(//|/\*|\*|#)' \
-    | rg -v '^\s*(//|/\*|\*|#)' \
+  rg -v '^[^:]+:[0-9]+:[[:space:]]*(//|/\*|\*)' \
+    | rg -v '^[0-9]+:[[:space:]]*(//|/\*|\*)' \
+    | rg -v '^\s*(//|/\*|\*)' \
     || true
 }
 
@@ -30,6 +30,12 @@ matches_for_pattern() {
   local pattern="$1"
   shift
   rg -n --pcre2 "$pattern" "$@" 2>/dev/null | strip_comments
+}
+
+matches_for_fixed_text() {
+  local file="$1"
+  local text="$2"
+  rg -n --fixed-strings "$text" "$file" 2>/dev/null | strip_comments
 }
 
 matches_for_multiline_pattern() {
@@ -100,7 +106,25 @@ assert_multiline_pattern_rejects() {
   trap - RETURN
 }
 
-PHASE20_TS_DRAFT_CONSTRUCTION_PATTERN='(?s)\b(?:Array\.from|new\s+Array)\s*\([^)]*(?:180|540|PRODUCT_SEGMENTS_PER_TRACK|PRODUCT_TOTAL_SEGMENTS)[^)]*\).{0,1200}\b(?:segmentId|sourceTimerange|targetTimerange|materials\s*:|tracks\s*:|segments\s*:)'
+assert_required_fixed_rejects_comment_only() {
+  local description="$1"
+  local required="$2"
+  local tmp_dir
+  tmp_dir="$(mktemp -d)"
+  trap 'rm -rf "$tmp_dir"' RETURN
+  printf '// %s\n' "$required" >"$tmp_dir/CommentOnly.ts"
+  if [ -n "$(matches_for_fixed_text "$tmp_dir/CommentOnly.ts" "$required")" ]; then
+    fail "required-text check matched comment-only ${description}"
+  fi
+  printf 'const activePhase20Token = "%s";\n' "$required" >"$tmp_dir/Active.ts"
+  if [ -z "$(matches_for_fixed_text "$tmp_dir/Active.ts" "$required")" ]; then
+    fail "required-text check did not catch active ${description}"
+  fi
+  rm -rf "$tmp_dir"
+  trap - RETURN
+}
+
+PHASE20_TS_DRAFT_CONSTRUCTION_PATTERN='(?s)(?:\b(?:Array\.from|new\s+Array)\s*\([^)]*(?:180|540|PRODUCT_SEGMENTS_PER_TRACK|PRODUCT_TOTAL_SEGMENTS)[^)]*\).{0,1200}\b(?:segmentId|sourceTimerange|targetTimerange|materials\s*:|tracks\s*:|segments\s*:)|\bfor\s*\([^)]*(?:180|540|PRODUCT_SEGMENTS_PER_TRACK|PRODUCT_TOTAL_SEGMENTS)[^)]*\)\s*\{.{0,1200}\b(?:segments|tracks|materials)\.push\s*\(\s*\{.{0,1200}\b(?:segmentId|sourceTimerange|targetTimerange|materials\s*:|tracks\s*:|segments\s*:)|\bfunction\s+\w*(?:Segment|Track|Material|Draft)\w*\s*\([^)]*\)\s*(?::\s*(?:Segment|Track|Material|Draft)[A-Za-z0-9_<>,\s\[\]]*)?\{.{0,1200}\b(?:segments|tracks|materials)\.push\s*\(\s*\{.{0,1200}\b(?:segmentId|sourceTimerange|targetTimerange|materials\s*:|tracks\s*:|segments\s*:))'
 PHASE20_RENDERER_FFMPEG_PATTERN='\b(?:buildRenderGraph|compileRenderGraph|compileFfmpeg|compileFfmpegJob|renderGraphToFfmpeg|filter_complex|filterComplex|ffmpegArgs|ffmpegCommand|ffmpegFilter|FfmpegJob|FfmpegExecutor|spawn\s*\(\s*["'\'']ffmpeg|execFile\s*\(\s*["'\'']ffmpeg|new\s+RenderGraph|new\s+Ffmpeg)\b'
 PHASE20_FALLBACK_SUCCESS_PATTERN='\b(?:(?:fallback|mock|artifact|cpuReadback|cpuProbe|decodedCpu|domOverlay|domOnly|nativeVideo|firstFrame|fileExistsOnly|sourceOnly)[A-Za-z]*(?:Success|Succeeded|Satisfied|Accepted|EvidenceOk)|success[A-Za-z]*(?:Fallback|Mock|Artifact|Cpu|Dom|NativeVideo|FirstFrame|FileExists|SourceOnly))\b'
 PHASE20_DEV_ONLY_UAT_PATTERN='\b(?:launchDevApp|startDevApp|devOnlyLongTimelineUat|devOnlyProductCloseout|test:real-workflow|pnpm\s+(?:--filter\s+@video-editor/desktop\s+)?(?:dev|exec\s+electron))\b'
@@ -129,6 +153,9 @@ PHASE20_PRODUCT_SOURCE_FILES=(
 )
 
 run_self_test() {
+  assert_required_fixed_rejects_comment_only \
+    "Phase 20 required production preview token" \
+    "renderGraphGpuComposited"
   assert_multiline_pattern_rejects \
     "TypeScript-owned 540-segment draft construction" \
     "$PHASE20_TS_DRAFT_CONSTRUCTION_PATTERN" \
@@ -137,6 +164,30 @@ run_self_test() {
   sourceTimerange: { start: 0, duration: 1000000 },
   targetTimerange: { start: index * 1000000, duration: 1000000 }
 }));'
+  assert_multiline_pattern_rejects \
+    "TypeScript-owned loop/push long draft construction" \
+    "$PHASE20_TS_DRAFT_CONSTRUCTION_PATTERN" \
+    'const segments = [];
+for (let index = 0; index < 540; index += 1) {
+  segments.push({
+    segmentId: `video-${index}`,
+    sourceTimerange: { start: 0, duration: 1000000 },
+    targetTimerange: { start: index * 1000000, duration: 1000000 }
+  });
+}'
+  assert_multiline_pattern_rejects \
+    "TypeScript-owned helper long draft construction" \
+    "$PHASE20_TS_DRAFT_CONSTRUCTION_PATTERN" \
+    'function buildLongSegments(): Segment[] {
+  const segments = [];
+  for (let index = 0; index < PRODUCT_TOTAL_SEGMENTS; index += 1) {
+    segments.push({
+      segmentId: `segment-${index}`,
+      targetTimerange: { start: index * 1000000, duration: 1000000 }
+    });
+  }
+  return segments;
+}'
   assert_pattern_rejects \
     "renderer-owned FFmpeg/render graph semantics" \
     "$PHASE20_RENDERER_FFMPEG_PATTERN" \

@@ -10,6 +10,31 @@ use testkit::large_timeline::{
     assert_no_track_overlaps, build_phase20_product_timeline, phase20_product_timeline_config,
 };
 
+const FORBIDDEN_DERIVED_KEYS: &[&str] = &[
+    "renderGraph",
+    "renderGraphs",
+    "ffmpegScript",
+    "ffmpegScripts",
+    "previewCache",
+    "previewCaches",
+    "previewFrame",
+    "previewFrames",
+    "thumbnail",
+    "thumbnails",
+    "waveform",
+    "waveforms",
+    "proxyFile",
+    "proxyFiles",
+    "export",
+    "exports",
+    "exportJob",
+    "exportJobs",
+    "runtime",
+    "runtimeHandle",
+    "runtimeHandles",
+    "absoluteTempOutputPath",
+];
+
 #[test]
 fn phase20_product_fixture_config_matches_locked_scale() {
     let config = phase20_product_timeline_config();
@@ -133,31 +158,46 @@ fn phase20_materializer_project_json_excludes_derived_artifacts() {
             .expect("project.json should be readable"),
     )
     .expect("project.json should parse");
-    let object = project_json
-        .as_object()
-        .expect("canonical project.json should be a JSON object");
+    let violations = collect_forbidden_project_keys(&project_json);
+    assert!(
+        violations.is_empty(),
+        "project.json must not include derived/runtime/export/cache fields: {violations:?}"
+    );
+}
 
-    for forbidden in [
-        "renderGraph",
-        "renderGraphs",
-        "ffmpegScripts",
-        "previewCache",
-        "previewCaches",
-        "previewFrames",
-        "thumbnails",
-        "waveforms",
-        "proxyFiles",
-        "exports",
-        "exportJobs",
-        "runtime",
-        "runtimeHandles",
-        "absoluteTempOutputPath",
-    ] {
-        assert!(
-            !object.contains_key(forbidden),
-            "project.json must not include derived/runtime/export/cache field {forbidden}"
-        );
-    }
+#[test]
+fn phase20_derived_artifact_scan_rejects_nested_project_json_fields() {
+    let project_json = serde_json::json!({
+        "materials": [
+            {
+                "materialId": "video-1",
+                "metadata": {
+                    "previewCache": {
+                        "path": "/tmp/derived-preview.png"
+                    }
+                }
+            }
+        ],
+        "tracks": [
+            {
+                "segments": [
+                    {
+                        "segmentId": "segment-1",
+                        "exportJob": "derived-job-id"
+                    }
+                ]
+            }
+        ]
+    });
+
+    let violations = collect_forbidden_project_keys(&project_json);
+    assert_eq!(
+        violations,
+        vec![
+            "$.materials[0].metadata.previewCache".to_string(),
+            "$.tracks[0].segments[0].exportJob".to_string(),
+        ]
+    );
 }
 
 struct Phase20MediaPaths {
@@ -184,6 +224,32 @@ fn phase20_materializer_bin() -> &'static str {
 
 fn path_str(path: &Path) -> &str {
     path.to_str().expect("test path should be UTF-8")
+}
+
+fn collect_forbidden_project_keys(value: &Value) -> Vec<String> {
+    let mut violations = Vec::new();
+    collect_forbidden_project_keys_at(value, "$", &mut violations);
+    violations
+}
+
+fn collect_forbidden_project_keys_at(value: &Value, path: &str, violations: &mut Vec<String>) {
+    match value {
+        Value::Object(map) => {
+            for (key, child) in map {
+                let child_path = format!("{path}.{key}");
+                if FORBIDDEN_DERIVED_KEYS.contains(&key.as_str()) {
+                    violations.push(child_path.clone());
+                }
+                collect_forbidden_project_keys_at(child, &child_path, violations);
+            }
+        }
+        Value::Array(items) => {
+            for (index, child) in items.iter().enumerate() {
+                collect_forbidden_project_keys_at(child, &format!("{path}[{index}]"), violations);
+            }
+        }
+        _ => {}
+    }
 }
 
 #[test]

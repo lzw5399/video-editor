@@ -40,11 +40,9 @@ fn ffmpeg_job_preview_frame_snapshot_contains_structured_args_and_filter_sidecar
         job.sidecars[0].path,
         "/derived/draft-compiler-preview-frame-png-filter.ffscript"
     );
-    assert!(
-        job.sidecars[0]
-            .contents
-            .contains("subtitles=filename='/derived/draft-compiler-preview-frame-png-text-text-a.ass':fontsdir='/fonts'")
-    );
+    assert!(job.sidecars[0].contents.contains(
+        "subtitles=filename='/derived/draft-compiler-preview-frame-png-text.ass':fontsdir='/fonts'"
+    ));
     assert_eq!(job.validation.expect_audio_stream, false);
 }
 
@@ -70,6 +68,30 @@ fn ffmpeg_job_preview_segment_and_export_share_graph_compiler_path() {
 }
 
 #[test]
+fn sequential_full_canvas_tracks_compile_to_concat_instead_of_overlay_and_flat_amix() {
+    let job = compile_ffmpeg_job(
+        &common::sequential_av_export_plan(3),
+        &common::compile_context(),
+    )
+    .expect("sequential full-canvas AV export should compile");
+
+    assert!(
+        job.filter_script
+            .contains("concat=n=3:v=1:a=0[vconcatraw0]")
+    );
+    assert!(
+        job.filter_script
+            .contains("[vconcatraw0]scale=1920:1080[vconcat0]")
+    );
+    assert!(job.filter_script.contains("concat=n=3:v=0:a=1[atrack0]"));
+    assert!(job.filter_script.contains("concat=n=3:v=0:a=1[atrack1]"));
+    assert!(job.filter_script.contains("amix=inputs=2"));
+    assert!(!job.filter_script.contains("overlay=x=0:y=0:enable"));
+    assert!(!job.filter_script.contains("adelay="));
+    assert!(!job.filter_script.contains("amix=inputs=6"));
+}
+
+#[test]
 fn filters_snapshot_uses_stable_labels_for_video_audio_text_outputs() {
     let job = compile_ffmpeg_job(&common::export_plan(), &common::compile_context())
         .expect("export job should compile");
@@ -77,14 +99,14 @@ fn filters_snapshot_uses_stable_labels_for_video_audio_text_outputs() {
     assert_eq!(
         job.filter_script,
         [
-            "[2:v]trim=start=0.700000:duration=0.100000,setpts=PTS-STARTPTS,scale=1920:1080[vstage0a]",
+            "[2:v]trim=start=0.700000:duration=0.100000,setpts=PTS-STARTPTS[vstage0a]",
             "[vstage0a]null[v0]",
             "[1:v]loop=loop=-1:size=1:start=0,fps=30/1,trim=duration=0.100000,setpts=PTS-STARTPTS,scale=1920:1080[vstage1a]",
             "[vstage1a]null[v1]",
             "color=c=black:s=1920x1080:r=30/1:d=0.100000[vbase0]",
             "[vbase0][v0]overlay=x=0:y=0:enable='between(t,0.000000,0.100000)'[vbase1]",
             "[vbase1][v1]overlay=x=0:y=0:enable='between(t,0.000000,0.100000)'[vbase2]",
-            "[vbase2]subtitles=filename='/derived/draft-compiler-export-mp4-h264-balanced-text-text-a.ass':fontsdir='/fonts'[vtext0]",
+            "[vbase2]subtitles=filename='/derived/draft-compiler-export-mp4-h264-balanced-text.ass':fontsdir='/fonts'[vtext0]",
             "[vtext0]format=yuv420p[vout]",
             "[0:a]atrim=start=0.600000:duration=0.100000,asetpts=PTS-STARTPTS,volume=1.000[a0]",
             "[2:a]atrim=start=0.700000:duration=0.100000,asetpts=PTS-STARTPTS,volume=1.000[a1]",

@@ -175,6 +175,39 @@ pub fn export_plan_with_wrapped_text() -> RenderGraphPlan {
     .expect("export plan should validate")
 }
 
+pub fn export_plan_with_overlapping_text_overlays_same_font() -> RenderGraphPlan {
+    let mut draft = compiler_draft();
+    let source_text = draft.tracks[3].segments[0]
+        .text
+        .clone()
+        .expect("compiler draft should include text");
+    draft.materials.push(material(
+        "text-material-b",
+        MaterialKind::Text,
+        "text://subtitle-b",
+    ));
+    let mut text_track = Track::new("text-track-b", TrackKind::Text, "文字二");
+    let mut text = segment("text-b", "text-material-b", 0, 500_000, 500_000);
+    text.text = Some(TextSegment {
+        content: "第二个文字段".to_owned(),
+        ..source_text
+    });
+    text_track.segments.push(text);
+    draft.tracks.push(text_track);
+
+    let graph = sample_graph_from_draft(&draft);
+    RenderGraphPlan::new(
+        graph,
+        RenderOutputProfile::export_mp4(
+            OutputDimensions::new(1_920, 1_080),
+            RationalFrameRate::new(30, 1),
+            TargetTimerange::new(Microseconds::new(600_000), Microseconds::new(100_000)),
+            ExportMp4Preset::h264_aac_balanced(),
+        ),
+    )
+    .expect("export plan should validate")
+}
+
 pub fn export_plan_with_audio_mix_intent() -> RenderGraphPlan {
     let mut draft = compiler_draft();
     let audio = &mut draft.tracks[2].segments[0];
@@ -207,6 +240,58 @@ pub fn export_plan_with_audio_mix_intent() -> RenderGraphPlan {
         ),
     )
     .expect("export plan should validate")
+}
+
+pub fn sequential_av_export_plan(segment_count: usize) -> RenderGraphPlan {
+    let mut draft = Draft::new("draft-sequential-av", "Sequential AV");
+    let mut video_track = Track::new("video-track", TrackKind::Video, "视频");
+    let mut audio_track = Track::new("audio-track", TrackKind::Audio, "音频");
+    for index in 0..segment_count {
+        let start = u64::try_from(index).expect("test index should fit") * 1_000_000;
+        let video_material_id = format!("video-material-{index:06}");
+        let audio_material_id = format!("audio-material-{index:06}");
+        draft.materials.push(material(
+            &video_material_id,
+            MaterialKind::Video,
+            "file:///media/video.mp4",
+        ));
+        draft.materials.push(material(
+            &audio_material_id,
+            MaterialKind::Audio,
+            "file:///media/audio.wav",
+        ));
+        video_track.segments.push(segment(
+            &format!("video-segment-{index:06}"),
+            &video_material_id,
+            0,
+            start,
+            1_000_000,
+        ));
+        audio_track.segments.push(segment(
+            &format!("audio-segment-{index:06}"),
+            &audio_material_id,
+            0,
+            start,
+            1_000_000,
+        ));
+    }
+    draft.tracks = vec![video_track, audio_track];
+
+    let duration = u64::try_from(segment_count).expect("test segment count should fit") * 1_000_000;
+    let graph = sample_graph_from_draft_for_range(
+        &draft,
+        TargetTimerange::new(Microseconds::ZERO, Microseconds::new(duration)),
+    );
+    RenderGraphPlan::new(
+        graph,
+        RenderOutputProfile::export_mp4(
+            OutputDimensions::new(1_920, 1_080),
+            RationalFrameRate::new(30, 1),
+            TargetTimerange::new(Microseconds::ZERO, Microseconds::new(duration)),
+            ExportMp4Preset::h264_aac_balanced(),
+        ),
+    )
+    .expect("sequential export plan should validate")
 }
 
 pub fn export_plan_with_audio_volume_keyframes() -> RenderGraphPlan {

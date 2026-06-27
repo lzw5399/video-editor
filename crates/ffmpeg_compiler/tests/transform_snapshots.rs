@@ -36,14 +36,14 @@ fn transform_snapshot_compiles_crop_scale_opacity_and_normalized_position() {
     assert_eq!(
         job.filter_script,
         [
-            "[2:v]trim=start=0.700000:duration=0.100000,setpts=PTS-STARTPTS,scale=1920:1080[vstage0a]",
+            "[2:v]trim=start=0.700000:duration=0.100000,setpts=PTS-STARTPTS[vstage0a]",
             "[vstage0a]null[v0]",
             "[1:v]loop=loop=-1:size=1:start=0,fps=30/1,trim=duration=0.100000,setpts=PTS-STARTPTS,crop=576:360:64:0,scale=1728:1080[vstage1a]",
             "[vstage1a]scale=864:540,format=rgba,colorchannelmixer=aa=0.760[v1]",
             "color=c=black:s=1920x1080:r=30/1:d=0.100000[vbase0]",
             "[vbase0][v0]overlay=x=0:y=0:enable='between(t,0.000000,0.100000)'[vbase1]",
             "[vbase1][v1]overlay=x=768:y=405:enable='between(t,0.000000,0.100000)'[vbase2]",
-            "[vbase2]subtitles=filename='/derived/draft-compiler-export-mp4-h264-balanced-text-text-a.ass':fontsdir='/fonts'[vtext0]",
+            "[vbase2]subtitles=filename='/derived/draft-compiler-export-mp4-h264-balanced-text.ass':fontsdir='/fonts'[vtext0]",
             "[vtext0]format=yuv420p[vout]",
             "[0:a]atrim=start=0.600000:duration=0.100000,asetpts=PTS-STARTPTS,volume=1.000[a0]",
             "[2:a]atrim=start=0.700000:duration=0.100000,asetpts=PTS-STARTPTS,volume=1.000[a1]",

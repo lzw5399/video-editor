@@ -6,7 +6,10 @@ fail_if_matches() {
   local pattern="$2"
   shift 2
 
-  if rg -n "$pattern" "$@"; then
+  local matches
+  matches="$(matches_for_pattern "$pattern" "$@" || true)"
+  if [ -n "$matches" ]; then
+    printf '%s\n' "$matches"
     echo "no-product-fallback violation: ${label}" >&2
     exit 1
   fi
@@ -17,11 +20,51 @@ require_in_file() {
   local required="$2"
   local label="$3"
 
-  if ! rg -q "$required" "$file"; then
+  if [ -z "$(matches_for_required_text "$file" "$required")" ]; then
     echo "no-product-fallback violation: ${label} must require ${required}" >&2
     exit 1
   fi
 }
+
+strip_comments() {
+  rg -v '^[^:]+:[0-9]+:[[:space:]]*(//|/\*|\*)' \
+    | rg -v '^[0-9]+:[[:space:]]*(//|/\*|\*)' \
+    | rg -v '^\s*(//|/\*|\*)' \
+    || true
+}
+
+matches_for_pattern() {
+  local pattern="$1"
+  shift
+  rg -n "$pattern" "$@" 2>/dev/null | strip_comments
+}
+
+matches_for_required_text() {
+  local file="$1"
+  local required="$2"
+  rg -n --fixed-strings "$required" "$file" 2>/dev/null | strip_comments
+}
+
+assert_required_text_ignores_comments() {
+  local required="$1"
+  local tmp_dir
+  tmp_dir="$(mktemp -d)"
+  trap 'rm -rf "$tmp_dir"' RETURN
+  printf '// %s\n' "$required" >"$tmp_dir/CommentOnly.ts"
+  if [ -n "$(matches_for_required_text "$tmp_dir/CommentOnly.ts" "$required")" ]; then
+    echo "no-product-fallback violation: required-token check matched comment-only ${required}" >&2
+    exit 1
+  fi
+  printf 'const activeRequirement = "%s";\n' "$required" >"$tmp_dir/Active.ts"
+  if [ -z "$(matches_for_required_text "$tmp_dir/Active.ts" "$required")" ]; then
+    echo "no-product-fallback violation: required-token check missed active ${required}" >&2
+    exit 1
+  fi
+  rm -rf "$tmp_dir"
+  trap - RETURN
+}
+
+assert_required_text_ignores_comments "renderGraphGpuComposited"
 
 fail_if_matches \
   "Electron realtime preview host must not request decoded/FFmpeg content evidence or expose mock/fallback playback displays" \

@@ -29,4 +29,7 @@ test("phase 20 long fixture helper contains no TypeScript-authored segment seman
   expect(source).toContain("cargo run -p testkit --bin phase20_long_fixture");
   expect(source).not.toMatch(/\bprojectJson\b|\bproject\.json\b.*writeFile|segments\s*:\s*\[/);
   expect(source).not.toMatch(/Array\.from\(\s*\{\s*length:\s*540\s*\}/);
+  expect(source).not.toMatch(
+    /\bfor\s*\([^)]*(?:180|540|PRODUCT_SEGMENTS_PER_TRACK|PRODUCT_TOTAL_SEGMENTS)[^)]*\)|\b(?:segments|tracks|materials)\.push\s*\(\s*\{/s
+  );
 });
