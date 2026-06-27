@@ -42,7 +42,12 @@ Full phase details are archived in `.planning/milestones/v1.0-ROADMAP.md`.
   3. User can select, scroll, zoom, scrub, move, trim, split, undo, redo, and preview on a long timeline while documented responsiveness budgets are met.
   4. User can keep scrubbing, editing inspector values, receiving preview frames, and committing or canceling interactions while export, probing, artifact generation, and cache work run.
   5. User never sees product success when evidence comes only from fallback, mock, artifact, CPU probe, DOM overlay, native-video proof, first-frame snapshot, or file-exists-only export proof; those states fail closed with diagnostics.
-**Plans**: TBD
+**Plans**: 4 plans
+Plans:
+- [ ] 20-01-PLAN.md — Rust/testkit long fixture, canonical materialization, and pressure gates
+- [ ] 20-02-PLAN.md — Playwright long fixture, canonical comparison, preview/export evidence, and bundle helpers
+- [ ] 20-03-PLAN.md — Packaged long-session UAT with responsiveness, reopen/export cycles, scheduler pressure, and commit/cancel coverage
+- [ ] 20-04-PLAN.md — No-fallback/source guards and `pnpm run test:phase20` aggregate wiring
 
 ### Phase 21: High-Frequency Interaction And Shortcut Session Hardening
 **Goal**: Users can perform common editing operations quickly through shortcuts and session-backed direct manipulation without save, undo, or revision storms.
