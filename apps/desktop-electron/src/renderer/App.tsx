@@ -1289,11 +1289,7 @@ export function App(): React.ReactElement {
         ...current,
         pendingCommand: "开始导出",
         commandError: null,
-        export: {
-          ...current.export,
-          error: null,
-          logSummary: "正在开始导出"
-        }
+        export: beginExportAttemptState(current.export)
       };
       workspaceRef.current = next;
       return next;
@@ -3120,10 +3116,13 @@ export function App(): React.ReactElement {
     setWorkspace((current) => {
       const next = {
         ...current,
-        export: {
-          ...current.export,
-          outputPath: value
-        }
+        export: clearDerivedExportState(
+          {
+            ...current.export,
+            outputPath: value
+          },
+          "导出设置已更新，请重新开始导出"
+        )
       };
       workspaceRef.current = next;
       return next;
@@ -3134,10 +3133,13 @@ export function App(): React.ReactElement {
     setWorkspace((current) => {
       const next = {
         ...current,
-        export: {
-          ...current.export,
-          preset: value
-        }
+        export: clearDerivedExportState(
+          {
+            ...current.export,
+            preset: value
+          },
+          "导出设置已更新，请重新开始导出"
+        )
       };
       workspaceRef.current = next;
       return next;
@@ -3469,6 +3471,20 @@ function clearDerivedExportState(
     progressPerMille: null,
     outTime: null,
     logSummary,
+    validation: null,
+    diagnosticLabel: null,
+    error: null
+  };
+}
+
+function beginExportAttemptState(exportState: ExportDisplayState): ExportDisplayState {
+  return {
+    ...exportState,
+    jobId: null,
+    phase: "queued",
+    progressPerMille: 0,
+    outTime: 0,
+    logSummary: "正在开始导出",
     validation: null,
     diagnosticLabel: null,
     error: null

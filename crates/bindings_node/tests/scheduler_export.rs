@@ -139,6 +139,59 @@ fn scheduler_export_start_status_completion_and_validation_report_scheduler_tele
 }
 
 #[test]
+fn scheduler_export_restarts_same_draft_profile_as_fresh_attempt() {
+    let _guard = ENV_LOCK.get_or_init(|| Mutex::new(())).lock().unwrap();
+    let sandbox = Sandbox::new("repeat-attempt");
+    let _ffmpeg = sandbox.ffmpeg_complete();
+    let _ffprobe = sandbox.ffprobe_success(1_920, 1_080, true);
+    let _runtime_dir = RuntimeDirectoryGuard::set(&sandbox.root);
+    let first_output = sandbox.root.join("repeat-first.mp4");
+    let second_output = sandbox.root.join("repeat-second.mp4");
+
+    let first = start_export("draft-scheduler-export-repeat", &first_output);
+    assert_eq!(first["ok"], true, "{first:#}");
+    let first_job_id = first["data"]["jobId"].as_str().unwrap().to_owned();
+    assert!(
+        first_job_id.contains("-attempt-"),
+        "export job id must identify a concrete attempt: {first:#}"
+    );
+    let first_completed = wait_for_export_phase(&first_job_id, ExportJobPhase::Completed);
+    assert_eq!(first_completed["data"]["phase"], "completed");
+
+    let second = start_export("draft-scheduler-export-repeat", &second_output);
+    assert_eq!(second["ok"], true, "{second:#}");
+    let second_job_id = second["data"]["jobId"].as_str().unwrap().to_owned();
+    assert_ne!(
+        first_job_id, second_job_id,
+        "same draft/profile exports must not reuse a terminal job id"
+    );
+    assert!(
+        second_job_id.contains("-attempt-"),
+        "second export job id must identify a concrete attempt: {second:#}"
+    );
+    assert_eq!(
+        second["data"]["outputPath"],
+        second_output.display().to_string()
+    );
+
+    let first_status = get_export_job_status(json!({ "jobId": first_job_id }))
+        .expect("first attempt status should remain queryable");
+    assert_eq!(first_status["ok"], true, "{first_status:#}");
+    assert_eq!(first_status["data"]["phase"], "completed");
+    assert_eq!(
+        first_status["data"]["outputPath"],
+        first_output.display().to_string()
+    );
+
+    let second_completed = wait_for_export_phase(&second_job_id, ExportJobPhase::Completed);
+    assert_eq!(second_completed["data"]["phase"], "completed");
+    assert_eq!(
+        second_completed["data"]["outputPath"],
+        second_output.display().to_string()
+    );
+}
+
+#[test]
 fn scheduler_export_cancel_queued_job_without_running_ffmpeg() {
     let _guard = ENV_LOCK.get_or_init(|| Mutex::new(())).lock().unwrap();
     let sandbox = Sandbox::new("queued-cancel");

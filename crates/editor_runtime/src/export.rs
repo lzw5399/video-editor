@@ -221,6 +221,7 @@ struct SchedulerExportState {
     pending: BTreeMap<JobId, ScheduledExportWork>,
     started_at: Instant,
     next_token_id: u64,
+    next_attempt_id: u64,
 }
 
 impl Default for SchedulerExportState {
@@ -231,6 +232,7 @@ impl Default for SchedulerExportState {
             pending: BTreeMap::new(),
             started_at: Instant::now(),
             next_token_id: 1,
+            next_attempt_id: 1,
         }
     }
 }
@@ -341,25 +343,30 @@ impl SchedulerExportService {
     where
         E: FfmpegExecutor + Send + 'static,
     {
-        let prepared = prepare_export_job(&runtime, payload)?;
-        let response_job_id = prepared.job_id.clone();
-        let export_job_id = JobId::new(prepared.job_id.clone());
+        let mut prepared = prepare_export_job(&runtime, payload)?;
+        let compiled_job_id = prepared.job_id.clone();
         let export_cancel_token = CancelToken::new();
-        let initial_status = ExportJobStatusResponse {
-            job_id: prepared.job_id.clone(),
-            phase: ExportJobPhase::Queued,
-            output_path: prepared.output_path.display().to_string(),
-            preset: prepared.preset,
-            progress_per_mille: Some(0),
-            out_time: Some(Microseconds::ZERO),
-            log_summary: Some("导出任务已进入调度器队列".to_owned()),
-            validation: None,
-            diagnostic: None,
-            dirty_facts: prepared.dirty_facts.clone(),
-        };
+        let attempt_job_id;
 
         {
             let mut state = self.state.lock().expect("scheduler export lock");
+            let attempt_id = state.next_attempt_id();
+            attempt_job_id = attempt_scoped_job_id(&compiled_job_id, attempt_id);
+            prepared.job_id = attempt_job_id.clone();
+            prepared.runtime_job.job_id = media_runtime::FfmpegJobId::new(attempt_job_id.clone());
+            let export_job_id = JobId::new(attempt_job_id.clone());
+            let initial_status = ExportJobStatusResponse {
+                job_id: attempt_job_id.clone(),
+                phase: ExportJobPhase::Queued,
+                output_path: prepared.output_path.display().to_string(),
+                preset: prepared.preset,
+                progress_per_mille: Some(0),
+                out_time: Some(Microseconds::ZERO),
+                log_summary: Some("导出任务已进入调度器队列".to_owned()),
+                validation: None,
+                diagnostic: None,
+                dirty_facts: prepared.dirty_facts.clone(),
+            };
             let export_task_token = state.next_task_token();
             let submitted_at_us = state.now_us();
             let envelope = JobEnvelope::new(
@@ -375,7 +382,7 @@ impl SchedulerExportService {
             })?;
             state.record_task_runtime_telemetry();
             state.entries.insert(
-                prepared.job_id.clone(),
+                attempt_job_id.clone(),
                 SchedulerExportEntry {
                     status: initial_status.clone(),
                     export_job_id: export_job_id.clone(),
@@ -394,9 +401,8 @@ impl SchedulerExportService {
                 },
             );
         }
-
         self.start_ready_jobs()?;
-        self.status(&response_job_id)
+        self.status(&attempt_job_id)
     }
 
     pub fn status(
@@ -843,6 +849,12 @@ impl SchedulerExportState {
         token
     }
 
+    fn next_attempt_id(&mut self) -> u64 {
+        let attempt_id = self.next_attempt_id;
+        self.next_attempt_id = self.next_attempt_id.saturating_add(1);
+        attempt_id
+    }
+
     fn binding_status(&self, entry: &SchedulerExportEntry) -> SchedulerExportStatusResponse {
         self.record_task_runtime_telemetry();
         SchedulerExportStatusResponse {
@@ -913,6 +925,10 @@ fn is_terminal_export_phase(phase: ExportJobPhase) -> bool {
             | ExportJobPhase::ValidationFailed
             | ExportJobPhase::Cancelled
     )
+}
+
+fn attempt_scoped_job_id(compiled_job_id: &str, attempt_id: u64) -> String {
+    format!("{compiled_job_id}-attempt-{attempt_id}")
 }
 
 pub fn global_export_registry() -> &'static ExportService {

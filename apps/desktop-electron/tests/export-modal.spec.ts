@@ -134,11 +134,20 @@ test("export modal starts, cancels, refreshes, and keeps command ownership in he
     await expectCommandCall(app, "startExport");
     await expect(dialog.getByLabel("导出进度")).toContainText("导出中");
     await expect(dialog.getByLabel("导出进度")).toContainText("12%");
+    await expect(dialog.getByLabel("输出路径")).toBeDisabled();
+    await expect(dialog.getByRole("button", { name: "开始导出" })).toBeDisabled();
     await expect(dialog.getByRole("button", { name: "取消导出" })).toBeEnabled();
 
     await dialog.getByRole("button", { name: "取消导出" }).click();
     await expectCommandCall(app, "cancelExport");
     await expect(dialog.getByLabel("导出进度")).toContainText("已取消");
+    await expect(dialog.getByLabel("输出路径")).toBeEnabled();
+
+    await dialog.getByLabel("输出路径").fill("/tmp/video-editor-export-next.mp4");
+    await expect(dialog.getByLabel("导出进度")).toContainText("未开始");
+    await expect(dialog.getByLabel("导出进度")).toContainText("0%");
+    await expect(dialog.getByLabel("导出状态", { exact: true })).toContainText("导出设置已更新，请重新开始导出");
+    await expect(dialog.getByRole("button", { name: "查询导出状态" })).toBeDisabled();
 
     await dialog.getByRole("button", { name: "开始导出" }).click();
     await dialog.getByRole("button", { name: "查询导出状态" }).click();
@@ -155,6 +164,7 @@ test("export modal starts, cancels, refreshes, and keeps command ownership in he
     const startCall = calls.find((call) => call.command === "startExport");
     expect(startCall?.outputPath).toBe("/tmp/video-editor-export.mp4");
     expect(startCall?.preset).toBe("h264AacBalanced");
+    expect(calls.filter((call) => call.command === "startExport").at(-1)?.outputPath).toBe("/tmp/video-editor-export-next.mp4");
   } finally {
     await app.close();
   }

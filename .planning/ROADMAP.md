@@ -126,7 +126,7 @@ Phases execute in order: 20 → 21 → 22 → 23 → 24.
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 20. Long Timeline Product UAT And Guard Baseline | v1.1 | 4/4 | Complete   | 2026-06-27 |
+| 20. Long Timeline Product UAT And Guard Baseline | v1.1 | 4/4 | Complete    | 2026-06-27 |
 | 21. High-Frequency Interaction And Shortcut Session Hardening | v1.1 | 0/TBD | Not started | - |
 | 22. Crop And Export Parity Closure | v1.1 | 0/TBD | Not started | - |
 | 23. Existing Phase 19 Parity And Diagnostics Closure | v1.1 | 0/TBD | Not started | - |

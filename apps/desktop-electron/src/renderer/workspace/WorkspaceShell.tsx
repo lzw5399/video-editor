@@ -504,6 +504,7 @@ function ExportModal({
   const exportCanCancel =
     exportState.jobId !== null &&
     (exportState.phase === "queued" || exportState.phase === "running" || exportState.phase === "validating");
+  const exportSettingsLocked = pending || exportCanCancel;
   const exportCompleted = exportState.phase === "completed";
   const startExportLabel = runtimeDiagnostics.canExport ? "开始导出" : "导出暂不可用";
   const exportMessage = showDeveloperDiagnostics
@@ -528,14 +529,14 @@ function ExportModal({
               type="text"
               value={exportState.outputPath}
               onChange={(event) => onExportOutputPathChange(event.currentTarget.value)}
-              disabled={pending}
+              disabled={exportSettingsLocked}
             />
           </label>
 
           <div className="export-modal-grid">
             <label className="export-modal-field">
               <span>分辨率</span>
-              <select aria-label="分辨率" defaultValue="draft" disabled={pending}>
+              <select aria-label="分辨率" defaultValue="draft" disabled={exportSettingsLocked}>
                 <option value="draft">跟随草稿</option>
                 <option value="1080p">1080p</option>
                 <option value="720p">720p</option>
@@ -543,7 +544,7 @@ function ExportModal({
             </label>
             <label className="export-modal-field">
               <span>帧率</span>
-              <select aria-label="帧率" defaultValue="draft" disabled={pending}>
+              <select aria-label="帧率" defaultValue="draft" disabled={exportSettingsLocked}>
                 <option value="draft">跟随草稿</option>
                 <option value="30">30 fps</option>
                 <option value="60">60 fps</option>
@@ -551,7 +552,7 @@ function ExportModal({
             </label>
             <label className="export-modal-field">
               <span>视频码率</span>
-              <select aria-label="视频码率" defaultValue="auto" disabled={pending}>
+              <select aria-label="视频码率" defaultValue="auto" disabled={exportSettingsLocked}>
                 <option value="auto">智能推荐</option>
                 <option value="8m">8 Mbps</option>
                 <option value="16m">16 Mbps</option>
@@ -563,7 +564,7 @@ function ExportModal({
                 aria-label="导出预设"
                 value={exportState.preset}
                 onChange={(event) => onExportPresetChange(event.currentTarget.value as ExportPreset)}
-                disabled={pending}
+                disabled={exportSettingsLocked}
               >
                 <option value="h264AacBalanced">{formatExportPreset("h264AacBalanced")}</option>
                 <option value="h264AacDraft">{formatExportPreset("h264AacDraft")}</option>
@@ -577,7 +578,7 @@ function ExportModal({
               aria-label="导出音频"
               checked={includeAudio}
               onChange={(event) => setIncludeAudio(event.currentTarget.checked)}
-              disabled={pending}
+              disabled={exportSettingsLocked}
             />
             <span>导出音频</span>
           </label>
@@ -596,7 +597,7 @@ function ExportModal({
             <section id="export-advanced-settings" className="export-advanced-panel" aria-label="高级导出设置">
               <label className="export-modal-field">
                 <span>编码格式</span>
-                <select aria-label="编码格式" defaultValue="h264" disabled={pending}>
+                <select aria-label="编码格式" defaultValue="h264" disabled={exportSettingsLocked}>
                   <option value="h264">H.264</option>
                 </select>
               </label>
@@ -610,7 +611,7 @@ function ExportModal({
                   aria-expanded={sampleRateOpen}
                   aria-controls="export-sample-rate-options"
                   onClick={() => setSampleRateOpen((current) => !current)}
-                  disabled={pending || !includeAudio}
+                  disabled={exportSettingsLocked || !includeAudio}
                 >
                   {sampleRate}
                 </button>
@@ -680,7 +681,7 @@ function ExportModal({
             className="primary-action"
             aria-label={startExportLabel}
             onClick={onStartExport}
-            disabled={pending || !runtimeDiagnostics.canExport}
+            disabled={pending || exportCanCancel || !runtimeDiagnostics.canExport}
           >
             导出
           </button>
