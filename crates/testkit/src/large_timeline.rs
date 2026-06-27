@@ -8,6 +8,10 @@ use draft_model::{
 };
 
 pub const MAX_SEGMENTS_PER_TRACK: usize = 10_000;
+pub const PHASE20_PRODUCT_SEGMENTS_PER_TRACK: usize = 180;
+pub const PHASE20_BLOCKING_SEGMENTS_PER_TRACK: usize = 1_000;
+pub const PHASE20_DIAGNOSTIC_SEGMENTS_PER_TRACK: usize = 3_000;
+pub const PHASE20_SEGMENT_DURATION_US: u64 = 1_000_000;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LargeTimelineConfig {
@@ -102,6 +106,21 @@ pub struct LargeTimelineDraft {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Phase20ProductMediaUris {
+    pub video_uri: String,
+    pub audio_uri: String,
+}
+
+impl Phase20ProductMediaUris {
+    pub fn new(video_uri: impl Into<String>, audio_uri: impl Into<String>) -> Self {
+        Self {
+            video_uri: video_uri.into(),
+            audio_uri: audio_uri.into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LocalizedEditTarget {
     pub track_id: TrackId,
     pub segment_id: draft_model::SegmentId,
@@ -160,6 +179,40 @@ pub fn build_large_timeline(
     })
 }
 
+pub fn phase20_product_timeline_config() -> LargeTimelineConfig {
+    phase20_timeline_config(PHASE20_PRODUCT_SEGMENTS_PER_TRACK)
+}
+
+pub fn phase20_blocking_timeline_config() -> LargeTimelineConfig {
+    phase20_timeline_config(PHASE20_BLOCKING_SEGMENTS_PER_TRACK)
+}
+
+pub fn phase20_diagnostic_timeline_config() -> LargeTimelineConfig {
+    phase20_timeline_config(PHASE20_DIAGNOSTIC_SEGMENTS_PER_TRACK)
+}
+
+pub fn build_phase20_product_timeline(
+    media_uris: Phase20ProductMediaUris,
+) -> Result<LargeTimelineDraft, LargeTimelineError> {
+    validate_phase20_media_uris(&media_uris)?;
+
+    let mut fixture = build_large_timeline(phase20_product_timeline_config())?;
+    fixture.draft.draft_id = "phase20-long-timeline-product-draft".into();
+    fixture.draft.metadata.name = "Phase 20 Long Timeline Product Fixture".to_owned();
+
+    for material in &mut fixture.draft.materials {
+        match material.kind {
+            MaterialKind::Video => material.uri = media_uris.video_uri.clone(),
+            MaterialKind::Audio => material.uri = media_uris.audio_uri.clone(),
+            MaterialKind::Text | MaterialKind::Image | MaterialKind::Sticker => {}
+        }
+    }
+
+    validate_draft(&fixture.draft).map_err(|error| LargeTimelineError::new(error.to_string()))?;
+    assert_no_track_overlaps(&fixture.draft)?;
+    Ok(fixture)
+}
+
 pub fn assert_no_track_overlaps(draft: &Draft) -> Result<(), LargeTimelineError> {
     for track in &draft.tracks {
         let mut ranges = track
@@ -184,6 +237,29 @@ pub fn assert_no_track_overlaps(draft: &Draft) -> Result<(), LargeTimelineError>
         }
     }
 
+    Ok(())
+}
+
+fn phase20_timeline_config(segments_per_track: usize) -> LargeTimelineConfig {
+    LargeTimelineConfig::new(segments_per_track)
+        .with_track_mix(true, true, true)
+        .with_segment_duration(Microseconds::new(PHASE20_SEGMENT_DURATION_US))
+        .with_localized_edit_index(segments_per_track / 2)
+}
+
+fn validate_phase20_media_uris(
+    media_uris: &Phase20ProductMediaUris,
+) -> Result<(), LargeTimelineError> {
+    if media_uris.video_uri.trim().is_empty() {
+        return Err(LargeTimelineError::new(
+            "phase 20 product video URI must not be empty",
+        ));
+    }
+    if media_uris.audio_uri.trim().is_empty() {
+        return Err(LargeTimelineError::new(
+            "phase 20 product audio URI must not be empty",
+        ));
+    }
     Ok(())
 }
 
