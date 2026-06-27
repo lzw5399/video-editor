@@ -1,4 +1,9 @@
+use std::path::{Path, PathBuf};
+use std::process::Command;
+
 use draft_model::{MaterialKind, Microseconds, TrackKind, validate_draft};
+use project_store::{StdPlatformFileSystem, open_project_bundle, project_json_path};
+use serde_json::Value;
 use testkit::large_timeline::{
     PHASE20_BLOCKING_SEGMENTS_PER_TRACK, PHASE20_DIAGNOSTIC_SEGMENTS_PER_TRACK,
     PHASE20_PRODUCT_SEGMENTS_PER_TRACK, PHASE20_SEGMENT_DURATION_US, Phase20ProductMediaUris,
@@ -24,6 +29,161 @@ fn phase20_product_fixture_config_matches_locked_scale() {
         config.target_stride,
         Microseconds::new(PHASE20_SEGMENT_DURATION_US)
     );
+}
+
+#[test]
+fn phase20_materializer_writes_reopenable_canonical_bundle() {
+    let temp_dir = tempfile::tempdir().expect("tempdir should be created");
+    let bundle_path = temp_dir.path().join("phase20-long.veproj");
+    let media = create_media_paths(temp_dir.path());
+
+    let output = Command::new(phase20_materializer_bin())
+        .args([
+            "--bundle",
+            path_str(&bundle_path),
+            "--video",
+            path_str(&media.video_path),
+            "--audio",
+            path_str(&media.audio_path),
+        ])
+        .output()
+        .expect("phase20 materializer should run");
+
+    assert!(
+        output.status.success(),
+        "materializer failed: status={:?}\nstdout={}\nstderr={}",
+        output.status.code(),
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let summary: Value =
+        serde_json::from_slice(&output.stdout).expect("materializer summary should be JSON");
+    assert_eq!(summary["bundlePath"], path_str(&bundle_path));
+    assert_eq!(
+        summary["projectJsonPath"],
+        path_str(&project_json_path(&bundle_path))
+    );
+    assert_eq!(summary["tracks"], 3);
+    assert_eq!(summary["segmentsPerTrack"], 180);
+    assert_eq!(summary["totalSegments"], 540);
+    assert_eq!(summary["durationUs"], 180_000_000);
+
+    let expected = build_phase20_product_timeline(Phase20ProductMediaUris::new(
+        path_str(&media.video_path),
+        path_str(&media.audio_path),
+    ))
+    .expect("expected phase 20 fixture should build");
+    let reopened = open_project_bundle(&StdPlatformFileSystem, &bundle_path)
+        .expect("materialized project should reopen");
+    assert_eq!(reopened.bundle.draft, expected.draft);
+    assert!(reopened.warnings.is_empty());
+}
+
+#[test]
+fn phase20_materializer_rejects_missing_required_arguments() {
+    for args in [
+        vec!["--video", "video.mp4", "--audio", "audio.wav"],
+        vec!["--bundle", "bundle.veproj", "--audio", "audio.wav"],
+        vec!["--bundle", "bundle.veproj", "--video", "video.mp4"],
+    ] {
+        let output = Command::new(phase20_materializer_bin())
+            .args(args)
+            .output()
+            .expect("phase20 materializer should run");
+        let stderr = String::from_utf8_lossy(&output.stderr);
+
+        assert!(
+            !output.status.success(),
+            "missing required arguments should fail"
+        );
+        assert!(
+            stderr.contains(
+                "Usage: phase20_long_fixture --bundle <path> --video <path> --audio <path>"
+            ),
+            "usage text should be product-readable, stderr={stderr}"
+        );
+    }
+}
+
+#[test]
+fn phase20_materializer_project_json_excludes_derived_artifacts() {
+    let temp_dir = tempfile::tempdir().expect("tempdir should be created");
+    let bundle_path = temp_dir.path().join("phase20-derived-check.veproj");
+    let media = create_media_paths(temp_dir.path());
+
+    let output = Command::new(phase20_materializer_bin())
+        .args([
+            "--bundle",
+            path_str(&bundle_path),
+            "--video",
+            path_str(&media.video_path),
+            "--audio",
+            path_str(&media.audio_path),
+        ])
+        .output()
+        .expect("phase20 materializer should run");
+    assert!(
+        output.status.success(),
+        "materializer failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let project_json: Value = serde_json::from_str(
+        &std::fs::read_to_string(project_json_path(&bundle_path))
+            .expect("project.json should be readable"),
+    )
+    .expect("project.json should parse");
+    let object = project_json
+        .as_object()
+        .expect("canonical project.json should be a JSON object");
+
+    for forbidden in [
+        "renderGraph",
+        "renderGraphs",
+        "ffmpegScripts",
+        "previewCache",
+        "previewCaches",
+        "previewFrames",
+        "thumbnails",
+        "waveforms",
+        "proxyFiles",
+        "exports",
+        "exportJobs",
+        "runtime",
+        "runtimeHandles",
+        "absoluteTempOutputPath",
+    ] {
+        assert!(
+            !object.contains_key(forbidden),
+            "project.json must not include derived/runtime/export/cache field {forbidden}"
+        );
+    }
+}
+
+struct Phase20MediaPaths {
+    video_path: PathBuf,
+    audio_path: PathBuf,
+}
+
+fn create_media_paths(root: &Path) -> Phase20MediaPaths {
+    let video_path = root.join("p0-long-av-tone-testsrc.mp4");
+    let audio_path = root.join("p0-long-tone.wav");
+    std::fs::write(&video_path, b"phase20 video placeholder")
+        .expect("video placeholder should be written");
+    std::fs::write(&audio_path, b"phase20 audio placeholder")
+        .expect("audio placeholder should be written");
+    Phase20MediaPaths {
+        video_path,
+        audio_path,
+    }
+}
+
+fn phase20_materializer_bin() -> &'static str {
+    env!("CARGO_BIN_EXE_phase20_long_fixture")
+}
+
+fn path_str(path: &Path) -> &str {
+    path.to_str().expect("test path should be UTF-8")
 }
 
 #[test]
