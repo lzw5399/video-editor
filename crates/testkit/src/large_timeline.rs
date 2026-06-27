@@ -12,6 +12,7 @@ pub const PHASE20_PRODUCT_SEGMENTS_PER_TRACK: usize = 180;
 pub const PHASE20_BLOCKING_SEGMENTS_PER_TRACK: usize = 1_000;
 pub const PHASE20_DIAGNOSTIC_SEGMENTS_PER_TRACK: usize = 3_000;
 pub const PHASE20_SEGMENT_DURATION_US: u64 = 1_000_000;
+const PHASE20_PRESSURE_TARGET_STRIDE_US: u64 = 1_250_000;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LargeTimelineConfig {
@@ -180,15 +181,24 @@ pub fn build_large_timeline(
 }
 
 pub fn phase20_product_timeline_config() -> LargeTimelineConfig {
-    phase20_timeline_config(PHASE20_PRODUCT_SEGMENTS_PER_TRACK)
+    phase20_timeline_config(
+        PHASE20_PRODUCT_SEGMENTS_PER_TRACK,
+        PHASE20_SEGMENT_DURATION_US,
+    )
 }
 
 pub fn phase20_blocking_timeline_config() -> LargeTimelineConfig {
-    phase20_timeline_config(PHASE20_BLOCKING_SEGMENTS_PER_TRACK)
+    phase20_timeline_config(
+        PHASE20_BLOCKING_SEGMENTS_PER_TRACK,
+        PHASE20_PRESSURE_TARGET_STRIDE_US,
+    )
 }
 
 pub fn phase20_diagnostic_timeline_config() -> LargeTimelineConfig {
-    phase20_timeline_config(PHASE20_DIAGNOSTIC_SEGMENTS_PER_TRACK)
+    phase20_timeline_config(
+        PHASE20_DIAGNOSTIC_SEGMENTS_PER_TRACK,
+        PHASE20_PRESSURE_TARGET_STRIDE_US,
+    )
 }
 
 pub fn build_phase20_product_timeline(
@@ -240,10 +250,14 @@ pub fn assert_no_track_overlaps(draft: &Draft) -> Result<(), LargeTimelineError>
     Ok(())
 }
 
-fn phase20_timeline_config(segments_per_track: usize) -> LargeTimelineConfig {
+fn phase20_timeline_config(
+    segments_per_track: usize,
+    target_stride_us: u64,
+) -> LargeTimelineConfig {
     LargeTimelineConfig::new(segments_per_track)
         .with_track_mix(true, true, true)
         .with_segment_duration(Microseconds::new(PHASE20_SEGMENT_DURATION_US))
+        .with_target_stride(Microseconds::new(target_stride_us))
         .with_localized_edit_index(segments_per_track / 2)
 }
 
