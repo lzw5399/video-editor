@@ -12,6 +12,17 @@ fail_if_matches() {
   fi
 }
 
+require_in_file() {
+  local file="$1"
+  local required="$2"
+  local label="$3"
+
+  if ! rg -q "$required" "$file"; then
+    echo "no-product-fallback violation: ${label} must require ${required}" >&2
+    exit 1
+  fi
+}
+
 fail_if_matches \
   "Electron realtime preview host must not request decoded/FFmpeg content evidence or expose mock/fallback playback displays" \
   'requestRealtimePreviewContentEvidence|shouldCollectContentEvidence|requestContentEvidence|mockFrameDisplay|VIDEO_EDITOR_TEST_EXPOSE_MOCK_FRAME_DISPLAY|VIDEO_EDITOR_TEST_MOCK_REALTIME_PREVIEW_FFMPEG_FALLBACK|requestFallbackFrame|ffmpegArtifactGenerated' \
@@ -105,6 +116,86 @@ if [ -f "$SCHEDULER_STRESS_SPEC" ]; then
       echo "no-product-fallback violation: scheduler stress success must require ${required}" >&2
       exit 1
     fi
+  done
+fi
+
+PHASE20_LONG_UAT_SPEC="apps/desktop-electron/tests/product-long-timeline-uat.spec.ts"
+PHASE20_LONG_EVIDENCE_HELPER="apps/desktop-electron/tests/helpers/longTimelineEvidence.ts"
+if [ -f "$PHASE20_LONG_UAT_SPEC" ]; then
+  [ -f "$PHASE20_LONG_EVIDENCE_HELPER" ] || {
+    echo "no-product-fallback violation: Phase 20 long UAT requires ${PHASE20_LONG_EVIDENCE_HELPER}" >&2
+    exit 1
+  }
+
+  fail_if_matches \
+    "Phase 20 long UAT must not be satisfied by mock runtime/export/artifact/audio switches or fake success helpers" \
+    'VIDEO_EDITOR_TEST_MOCK_EXPORT_COMMANDS:\s*"1"|VIDEO_EDITOR_TEST_MOCK_ARTIFACT_COMMANDS:\s*"1"|VIDEO_EDITOR_TEST_MOCK_AUDIO_COMMANDS:\s*"1"|VIDEO_EDITOR_TEST_MOCK_RUNTIME_CAPABILITIES:\s*"1"|mock(?:Runtime|Export|Artifact|Audio|Scheduler)Success|artifact(?:Export|Scheduler|Preview)Success|audioMockSuccess|runtimeMockSuccess|fileExistsOnlyExportSuccess|sourceOnlyExportSuccess' \
+    "$PHASE20_LONG_UAT_SPEC" \
+    "$PHASE20_LONG_EVIDENCE_HELPER"
+
+  for required in \
+    'launchPackagedApp' \
+    'expectPhase20PreviewProductionEvidence' \
+    'renderGraphGpuComposited' \
+    'captureVisiblePreviewEvidence' \
+    'requestProjectSessionPreviewFrameCount' \
+    'waitForCompositedPreviewEvidence' \
+    'waitForProductPlaybackSuccess' \
+    'fallbackCount'; do
+    require_in_file "$PHASE20_LONG_UAT_SPEC" "$required" "Phase 20 production preview evidence"
+  done
+
+  for required in \
+    'readTaskRuntimeTelemetry' \
+    'getTaskRuntimeTelemetry' \
+    'queueLatencyUs' \
+    'rejectedCount' \
+    'fallbackCount' \
+    'staleRejectedCount' \
+    'commitProjectInteraction' \
+    'cancelProjectInteraction'; do
+    require_in_file "$PHASE20_LONG_UAT_SPEC" "$required" "Phase 20 scheduler pressure evidence"
+  done
+
+  for required in \
+    'expectPhase20ExportMedia' \
+    'exportAndValidatePhase20Media' \
+    'firstExport' \
+    'secondExport' \
+    'sampleTimesSeconds' \
+    'editPointSeconds' \
+    'reopenCycles: 2' \
+    'exportValidations: 2' \
+    'firstReopen' \
+    'secondReopen'; do
+    require_in_file "$PHASE20_LONG_UAT_SPEC" "$required" "Phase 20 two-cycle export evidence"
+  done
+
+  for required in \
+    'writePhase20EvidenceSummary' \
+    'collectPhase20FailureEvidence' \
+    'productSummary' \
+    'developerDetails' \
+    'evidenceDir'; do
+    require_in_file "$PHASE20_LONG_UAT_SPEC" "$required" "Phase 20 evidence bundle"
+  done
+
+  for required in \
+    'expectPhase20PreviewProductionEvidence' \
+    'fallbackActive' \
+    'renderGraphGpuComposited' \
+    'requestProjectSessionPreviewFrameCount' \
+    'expectPhase20ExportMedia' \
+    'probeMediaRuntime' \
+    'bundled' \
+    'readFfprobeJson' \
+    'sampleExportFrames' \
+    'sampledFrames' \
+    'sampledFramesJsonPath' \
+    'minDistinctSampleHashes' \
+    'writePhase20EvidenceSummary' \
+    'collectPhase20FailureEvidence'; do
+    require_in_file "$PHASE20_LONG_EVIDENCE_HELPER" "$required" "Phase 20 evidence helper"
   done
 fi
 
