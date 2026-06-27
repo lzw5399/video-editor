@@ -88,6 +88,10 @@ test("Phase 20 packaged responsiveness UAT @phase20 @responsiveness", async () =
   }
 });
 
+test("Phase 20 packaged canonical reopen and export UAT @phase20 @canonical @export", async () => {
+  expect(false, "RED: packaged canonical reopen/export UAT is not implemented yet").toBe(true);
+});
+
 async function runResponsivenessWorkflow(
   page: Page,
   app: ProductJourneyAppController,
