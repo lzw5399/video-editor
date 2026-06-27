@@ -23,6 +23,21 @@ Milestone archive:
 - `.planning/milestones/v1.0-ROADMAP.md`
 - `.planning/milestones/v1.0-REQUIREMENTS.md`
 - `.planning/milestones/v1.0-MILESTONE-AUDIT.md`
+- `.planning/milestones/v1.0-phases/`
+
+## Current Milestone: v1.1 Usability & Export
+
+**Goal:** Make the editor feel reliably usable in real editing sessions, while closing the crop/export/effects parity gaps for the existing Phase 19 capability set.
+
+**Target features:**
+
+- Real editing UAT for longer timelines, mixed media, repeated edit/save/reopen/export workflows, and end-to-end product acceptance.
+- Long timeline usability and performance gates that prove the editor remains responsive under realistic editing pressure.
+- Shortcut and interaction polish for common editing operations, including timeline, preview, inspector, and playhead workflows.
+- UI detail cleanup where real product use feels rough, with screenshot or product-flow evidence when visual behavior changes.
+- Crop/export closure, including preview/export parity and failure diagnostics.
+- Existing Phase 19 effects, filters, transitions, masks, blends, and retiming parity fixes without expanding into a large new effect library.
+- Better unsupported/degraded/failure diagnostics for export and effect paths.
 
 ## Requirements
 
@@ -40,15 +55,9 @@ Milestone archive:
 
 ### Active
 
-No active v1.0 requirements remain. The next milestone must define a fresh `.planning/REQUIREMENTS.md` through `$gsd-new-milestone`.
-
-Candidate next-milestone topics:
-
-- Clean up planning traceability and verification artifact consistency identified by the v1.0 milestone audit.
-- Finish release/package polish such as Electron app metadata/icon and Node version alignment.
-- Close documented crop/export limitations and broaden production effect/export parity.
-- Run deeper real-user product UAT on longer timelines and template-heavy drafts.
-- Decide whether v1.1 should prioritize release hardening, editor usability depth, compatibility coverage, or mobile/server productization.
+- [ ] Define v1.1 requirements for real editing UAT, long timeline usability, shortcuts, UI detail cleanup, crop/export closure, existing Phase 19 effect parity, and failure diagnostics.
+- [ ] Keep every v1.1 phase tied to end-to-end product acceptance, not isolated unit-level completion.
+- [ ] Avoid broad new effect-library expansion until the existing Phase 19 capability set is preview/export reliable.
 
 ### Out of Scope
 
@@ -91,13 +100,26 @@ The product remains guided by `AI_Video_Editing_Single_Engine_Guideline.md` with
 | Treat high-frequency interaction as Rust-owned session semantics | Dragging, scrubbing, and inspector updates need live feedback without save/undo/revision storms | v1.0 added interaction sessions and coalesced commits |
 | Keep external adapter IDs out of internal render semantics | Proprietary IDs are compatibility/report facts, not first-party effects | v1.0 Kaipai and Phase 19 boundaries enforce this |
 
-## Next Milestone Goals
+## Evolution
 
-Run `$gsd-new-milestone` before implementation. Recommended decision points:
+This document evolves at phase transitions and milestone boundaries.
 
-- Is v1.1 a release-hardening milestone or a deeper editor-capability milestone?
-- Should planning traceability cleanup happen first, or stay as archived tech debt?
-- Which remaining product limitations should become hard acceptance gates: crop export, app metadata/icon, long timeline performance, broader effect parity, or compatibility import/export?
+**After each phase transition**:
+1. Requirements invalidated? Move to Out of Scope with reason.
+2. Requirements validated? Move to Validated with phase reference.
+3. New requirements emerged? Add to Active.
+4. Decisions to log? Add to Key Decisions.
+5. "What This Is" still accurate? Update if drifted.
+
+**After each milestone**:
+1. Full review of all sections.
+2. Core Value check: still the right priority?
+3. Audit Out of Scope: reasons still valid?
+4. Update Context with current state.
+
+## Next Milestone Notes
+
+v1.1 starts from the v1.0 Production Core. Phase numbering continues after Phase 19, so the roadmap should start at Phase 20 unless explicitly reset.
 
 ---
-*Last updated: 2026-06-26 after v1.0 Production Core milestone close*
+*Last updated: 2026-06-27 after v1.1 milestone direction confirmation*

@@ -1,37 +1,33 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.0
-milestone_name: milestone
-current_phase: 0
-status: Awaiting next milestone
-stopped_at: Completed 19-14-PLAN.md
-last_updated: "2026-06-26T02:45:26.598+08:00"
-last_activity: 2026-06-26
-last_activity_desc: Milestone v1.0 completed and archived
+milestone: v1.1
+milestone_name: Usability & Export
+status: planning
+last_updated: "2026-06-27T14:29:46.276Z"
+last_activity: 2026-06-27
 progress:
-  total_phases: 25
-  completed_phases: 25
-  total_plans: 187
-  completed_plans: 187
-  percent: 100
-current_phase_name: production-effects-retiming-and-transition-semantics
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-06-26)
+See: .planning/PROJECT.md (updated 2026-06-27)
 
 **Core value:** Users can reliably import media, edit segments on a familiar Jianying-style timeline, preview the result, save the draft, and export a video through one consistent editing and rendering model.
-**Current focus:** v1.0 complete — awaiting next milestone planning
+**Current focus:** v1.1 Usability & Export — defining requirements
 
 ## Current Position
 
-Phase: Milestone v1.0 complete
+Phase: Not started (defining requirements)
 Plan: —
-Status: Awaiting next milestone
-Last activity: 2026-06-26 — Milestone v1.0 completed and archived
+Status: Defining requirements
+Last activity: 2026-06-27 — Milestone v1.1 started
 
 ## Performance Metrics
 
