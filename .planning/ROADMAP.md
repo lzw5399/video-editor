@@ -45,13 +45,13 @@ Full phase details are archived in `.planning/milestones/v1.0-ROADMAP.md`.
   4. User can keep scrubbing, editing inspector values, receiving preview frames, and committing or canceling interactions while export, probing, artifact generation, and cache work run.
   5. User never sees product success when evidence comes only from fallback, mock, artifact, CPU probe, DOM overlay, native-video proof, first-frame snapshot, or file-exists-only export proof; those states fail closed with diagnostics.
 
-**Plans**: 2/4 plans executed
+**Plans**: 3/4 plans executed
 Plans:
 **Wave 1**
 
 - [x] 20-01-PLAN.md — Rust/testkit long fixture, canonical materialization, and pressure gates
 - [x] 20-02-PLAN.md — Playwright long fixture, canonical comparison, preview/export evidence, and bundle helpers
-- [ ] 20-03-PLAN.md — Packaged long-session UAT with responsiveness, reopen/export cycles, scheduler pressure, and commit/cancel coverage
+- [x] 20-03-PLAN.md — Packaged long-session UAT with responsiveness, reopen/export cycles, scheduler pressure, and commit/cancel coverage
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -126,7 +126,7 @@ Phases execute in order: 20 → 21 → 22 → 23 → 24.
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 20. Long Timeline Product UAT And Guard Baseline | v1.1 | 2/4 | In Progress|  |
+| 20. Long Timeline Product UAT And Guard Baseline | v1.1 | 3/4 | In Progress|  |
 | 21. High-Frequency Interaction And Shortcut Session Hardening | v1.1 | 0/TBD | Not started | - |
 | 22. Crop And Export Parity Closure | v1.1 | 0/TBD | Not started | - |
 | 23. Existing Phase 19 Parity And Diagnostics Closure | v1.1 | 0/TBD | Not started | - |
