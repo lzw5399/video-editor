@@ -35,7 +35,7 @@
 
 - [ ] **DIAG11-01**: Export, effect, and crop diagnostics expose typed codes, product-safe copy, affected draft targets where possible, and opt-in developer details.
 - [ ] **ADAPT11-01**: External adapter provider IDs and raw provider payloads remain limited to adapter, report, or provenance boundaries and do not become first-party render semantics.
-- [ ] **GATE11-01**: Product success cannot be satisfied by fallback, mock, artifact, CPU probe, DOM overlay, native single-video proof, first-frame snapshot, or file-exists-only export evidence.
+- [x] **GATE11-01**: Product success cannot be satisfied by fallback, mock, artifact, CPU probe, DOM overlay, native single-video proof, first-frame snapshot, or file-exists-only export evidence.
 
 ### UI Polish
 
@@ -90,7 +90,7 @@ Traceability is filled during roadmap creation. Each v1.1 requirement must map t
 | FX11-02 | Phase 23 | Pending |
 | DIAG11-01 | Phase 23 | Pending |
 | ADAPT11-01 | Phase 23 | Pending |
-| GATE11-01 | Phase 20 | Pending |
+| GATE11-01 | Phase 20 | Complete |
 | UI11-01 | Phase 24 | Pending |
 | UI11-02 | Phase 24 | Pending |
 
